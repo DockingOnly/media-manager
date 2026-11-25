@@ -113,6 +113,13 @@ def write_show(show_dir: Path, data: dict, tmdb_id, overwrite: bool) -> bool:
     if existing is not None:
         merge_into(existing, fresh, SHOW_MANAGED)
     nfo.apply_edits(root, nfo.load_edits(f"tv:{tmdb_id}"))
+    from . import ratings
+    try:  # IMDb, Rotten Tomatoes and Metacritic for the show, from OMDb, when you've set a key
+        found = ratings.for_imdb(data["show"].get("imdb_id"))
+    except core.UserError:
+        found = None
+    if found:
+        ratings.add_to(root, found, data["show"].get("vote_average"))
     path.write_bytes(nfo.to_bytes(root))
     return True
 

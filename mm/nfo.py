@@ -230,7 +230,7 @@ def load_edits(tmdb_id) -> dict:
     return core.load_json(core.EDITS, {}).get(str(tmdb_id), {})
 
 
-def write_nfo(path: Path, fresh_xml, tmdb_id, overwrite: bool, video: Path = None) -> bool:
+def write_nfo(path: Path, fresh_xml, tmdb_id, overwrite: bool, video: Path = None, ratings=None, tmdb_rating=None) -> bool:
     """Create or update one .nfo, with the video's technical details. Returns False when it exists and
     overwrite is off."""
     edits = load_edits(tmdb_id)
@@ -243,6 +243,9 @@ def write_nfo(path: Path, fresh_xml, tmdb_id, overwrite: bool, video: Path = Non
     else:
         root = parse_xml(fresh_xml)
     apply_edits(root, edits)
+    if ratings:
+        from . import ratings as _ratings
+        _ratings.add_to(root, ratings, *(tmdb_rating or (None, None)))
     if video is not None:
         from . import mediainfo
         mediainfo.add_fileinfo(root, video)
@@ -254,9 +257,14 @@ def write_movie_files(tmdb_id, group: list, folders: dict, root: Path, overwrite
     result = {"nfo": 0, "images": 0, "skipped": 0}
     d = tmdbapi.tmdb(f"/movie/{tmdb_id}", append_to_response="credits,release_dates,external_ids,videos")
     xml = build_nfo(d)
+    from . import ratings
+    try:  # IMDb, Rotten Tomatoes and Metacritic from OMDb, when you've set a key
+        found = ratings.for_imdb(d.get("imdb_id") or d.get("external_ids", {}).get("imdb_id"))
+    except core.UserError as err:
+        found, result["ratings_error"] = None, str(err)
     for it in group:
         video = Path(root, it["path"])
-        if write_nfo(video.with_suffix(".nfo"), xml, tmdb_id, overwrite, video):
+        if write_nfo(video.with_suffix(".nfo"), xml, tmdb_id, overwrite, video, found, (d.get("vote_average"), d.get("vote_count"))):
             result["nfo"] += 1
         else:
             result["skipped"] += 1
@@ -288,7 +296,7 @@ def write_all(job: dict, root: Path, overwrite: bool, artwork: bool) -> dict:
     folders = library.by_folder(items, root)
     core.job_step(job, "Writing .nfo files" + (" and artwork" if artwork else ""), len(groups))
     totals = {"nfo": 0, "images": 0, "skipped": 0}
-    failed = []
+    failed, notes = [], set()
 
     def one(entry):
         tmdb_id, group = entry
@@ -299,6 +307,8 @@ def write_all(job: dict, root: Path, overwrite: bool, artwork: bool) -> dict:
             with core.job_lock:
                 for k in totals:
                     totals[k] += r[k]
+                if r.get("ratings_error"):
+                    notes.add(r["ratings_error"])
         except (core.TmdbError, OSError, urllib.error.URLError) as err:
             failed.append({"name": group[0]["match"]["name"], "error": str(err)})
         finally:
@@ -308,4 +318,5 @@ def write_all(job: dict, root: Path, overwrite: bool, artwork: bool) -> dict:
         list(pool.map(one, groups.items()))
     with core.lock:
         items = [dict(i) for i in library.rescan()]  # refresh the .nfo/artwork checkmarks
-    return {"movies": len(groups), "failed": failed, "cancelled": job["cancel"], "items": items, **totals}
+    return {"movies": len(groups), "failed": failed, "cancelled": job["cancel"], "items": items,
+            "ratings_note": " ".join(sorted(notes)), **totals}

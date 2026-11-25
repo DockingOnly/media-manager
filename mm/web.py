@@ -67,6 +67,7 @@ def settings_view(cfg: dict) -> dict:
             "yt_login": cfg.get("yt_login") or "", "yt_cookie_file": cfg.get("yt_cookie_file") or "",
             "patterns": {k: core.pattern(k, cfg) for k in core.PATTERNS},
             "pattern_defaults": {k: v[0] for k, v in core.PATTERNS.items()},
+            "has_omdb_key": bool(cfg.get("omdb_key")), "omdb_key_hint": (cfg.get("omdb_key") or "")[-4:],
             "has_fanart_key": bool(cfg.get("fanart_key")), "fanart_key_hint": (cfg.get("fanart_key") or "")[-4:]}
 
 
@@ -98,6 +99,11 @@ def api_settings():
             raise UserError("Enter the full path of your cookies.txt file.")
     if isinstance(data.get("patterns"), dict):
         changes["patterns"] = {k: core.check_pattern(k, data["patterns"].get(k, "")) for k in core.PATTERNS}
+    omdb_key = (data.get("omdb_key") or "").strip()
+    if omdb_key:
+        from . import ratings
+        ratings.check_key(omdb_key)  # raises if OMDb refuses it
+        changes["omdb_key"] = omdb_key
     fanart_key = (data.get("fanart_key") or "").strip()
     if fanart_key:
         artwork.check_fanart_key(fanart_key)  # raises if fanart.tv refuses it
@@ -126,6 +132,7 @@ def api_settings():
         changes.update(os_key=os_key, os_user=os_user, os_pass=os_pass if os_user else "")
     cfg = core.save_config(**changes)
     return jsonify({**settings_view(cfg), "verified": bool(key), "os_info": os_info,
+                    "omdb_info": "OMDb accepted the key." if omdb_key else None,
                     "fanart_info": "fanart.tv accepted the key." if fanart_key else None})
 
 

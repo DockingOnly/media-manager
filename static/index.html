@@ -205,6 +205,9 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
   </div>
   <p class="note">Some trailers are age-restricted, and YouTube only shows them to signed-in users. The app tries every trailer without your login first and only uses it for those. Be signed in to youtube.com in the browser you choose. <strong>Firefox</strong> works directly. Chrome and Edge usually lock their logins on Windows; with those, install a “cookies.txt” export extension (for example “Get cookies.txt LOCALLY”), export while on youtube.com, and choose “A cookies.txt file”. Your login never leaves this computer.</p>
   <p id="ytMsg" class="note" role="status"></p>
+  <h2 style="margin-top:18px">Ratings (OMDb, optional)</h2>
+  <div class="row"><div><label for="omdbKey">OMDb API key</label><input id="omdbKey" type="password" autocomplete="off" spellcheck="false" style="width:320px"></div></div>
+  <p class="note">Adds IMDb, Rotten Tomatoes and Metacritic ratings to the .nfo files the app writes (IMDb becomes the rating Jellyfin shows; Rotten Tomatoes its critic rating). Get a free key (1,000 lookups a day) at omdbapi.com, and activate it from the email OMDb sends.</p>
   <h2 style="margin-top:18px">Rename patterns</h2>
   <p class="note" style="margin-top:0">How the renamer names folders and files. Placeholders in curly brackets are filled in; empty ones (a missing year, say) are tidied away. Season 0 is always “Specials”, and episode names must include {code} (the S01E02 part Jellyfin reads). <button class="ghost small" id="patReset" type="button">Reset to defaults</button></p>
   <div class="pats">
@@ -609,6 +612,7 @@ function showSettings(c){
   $("#ytLogin").value=c.yt_login||"";$("#ytFile").value=c.yt_cookie_file||"";$("#ytFileBox").hidden=$("#ytLogin").value!=="file";
   patDefaults=c.pattern_defaults||patDefaults;
   PAT_NAMES.forEach(k=>{$("#pat_"+k).value=(c.patterns||{})[k]||patDefaults[k]||""});showPatternExamples();
+  $("#omdbKey").value="";$("#omdbKey").placeholder=c.has_omdb_key?`Saved (ends in ${c.omdb_key_hint})`:"Optional";
   $("#fanKey").value="";$("#fanKey").placeholder=c.has_fanart_key?`Saved (ends in ${c.fanart_key_hint})`:"Optional";
   $("#subLangs").value=c.sub_langs||"en";$("#sLangs").value=c.sub_langs||"en";$("#sHear").value=c.sub_hearing||"normal";
 }
@@ -617,9 +621,9 @@ $("#saveSet").onclick=async()=>{
   const done=busy($("#saveSet"),"Checking…");
   try{const d=await api("/api/settings",{tmdb_key:$("#key").value,language:$("#lang").value,
       os_key:$("#osKey").value,os_user:$("#osUser").value,os_pass:$("#osPass").value,sub_langs:$("#subLangs").value,
-      yt_login:$("#ytLogin").value,yt_cookie_file:$("#ytFile").value,fanart_key:$("#fanKey").value,
+      yt_login:$("#ytLogin").value,yt_cookie_file:$("#ytFile").value,fanart_key:$("#fanKey").value,omdb_key:$("#omdbKey").value,
       patterns:Object.fromEntries(PAT_NAMES.map(k=>[k,$("#pat_"+k).value]))});showSettings(d);
-    const notes=[d.verified&&"TMDB accepted the key.",d.os_info,d.fanart_info,"Settings saved."].filter(Boolean).join(" ");
+    const notes=[d.verified&&"TMDB accepted the key.",d.os_info,d.omdb_info,d.fanart_info,"Settings saved."].filter(Boolean).join(" ");
     $("#setMsg").innerHTML=`<span class="tag r">${esc(notes)}</span>`}
   catch(e){$("#setMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}
   done();
@@ -725,6 +729,7 @@ $("#nGo").onclick=async()=>{
       (d.kept?` ${d.kept} kept as they are because their titles don't match TMDB's (tinyMediaManager may have numbered those episodes differently).`:"")+
       (d.unknown?` ${d.unknown} not on TMDB.`:"")+(d.failed.length?` ${d.failed.length} failed: ${d.failed.map(f=>`${f.name} (${f.error})`).join("; ")}`:""),!!d.failed.length);
     else finish(`Done for ${plural(d.movies,"movie")}: ${plural(d.nfo,".nfo file")} and ${plural(d.images,"image")} written, ${d.skipped} already there.`+
+      (d.ratings_note?` Ratings were left out: ${d.ratings_note}`:"")+
       (d.failed.length?` ${d.failed.length} failed: ${d.failed.map(f=>`${f.name} (${f.error})`).join("; ")}`:""),!!d.failed.length);
   }catch(e){finish(e.message,true)}
 };
@@ -748,7 +753,8 @@ function viewFrom(d){
   else{
     h+=`<p>${esc(i.plot)||'<span class="note">No plot.</span>'}${ed("plot")}</p><dl class="facts">`;
     const row=(k,v,key)=>v?`<dt>${k}</dt><dd>${v}${key?ed(key):""}</dd>`:"";
-    const r=i.ratings||{},rt=Object.entries(r).map(([k,v])=>`${esc(k.replace("themoviedb","TMDB").replace("imdb","IMDb"))} ${esc(v)}`).join(" · ");
+    const RN={imdb:"IMDb",themoviedb:"TMDB",tmdb:"TMDB",tomatometerallcritics:"Rotten Tomatoes",metacritic:"Metacritic",trakt:"Trakt"};
+    const r=i.ratings||{},rt=Object.entries(r).map(([k,v])=>`${esc(RN[k]||k)} ${esc(v)}${k==="tomatometerallcritics"?"%":k==="metacritic"?"/100":""}`).join(" · ");
     h+=row("Original title",i.originaltitle&&i.originaltitle!==i.title?esc(i.originaltitle):"","originaltitle")
       +row("Sort title",esc(i.sorttitle),"sorttitle")+row("Genres",esc((i.genres||[]).join(", ")),"genres")
       +row("Released",esc(i.premiered))+row("Rating",rt)+row("Age rating",esc(i.mpaa),"mpaa")

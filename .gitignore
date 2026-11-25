@@ -25,3 +25,4 @@ tv_library-*.json
 *.tmp
 *.part
 *.new
+ratings_cache.json
