@@ -224,8 +224,10 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 </section>
 
 <div class="bar">
-  <input id="folder" placeholder="Movie folder, for example D:\Movies" aria-label="Movie folder" spellcheck="false">
+  <span id="pickBox" hidden style="display:flex;gap:6px;align-items:center"><select id="folderPick" aria-label="Library folder" title="Switch to another library folder"></select><button class="ghost small" id="folderForget" title="Remove this folder from the list (nothing on disk changes)">Forget</button></span>
+  <input id="folder" list="folderList" placeholder="Movie folder, for example D:\Movies" aria-label="Movie folder" spellcheck="false">
   <button id="scan">Scan folder</button>
+  <datalist id="folderList"></datalist>
 </div>
 <div class="prog" id="prog" hidden>
   <div class="ptext"><span><span id="pLabel" role="status"></span> <span id="pDetail"></span></span><span class="right"><span id="pCount"></span><button class="ghost small" id="pCancel" hidden>Cancel</button></span></div>
@@ -552,6 +554,7 @@ function changeText(c){
 async function scanFolder(refresh){
   try{const d=await runJob(ep("/api/scan"),{folder:$("#folder").value,refresh},refresh?"Checking for changes":"Finding video files");applyResult(d);
     const n=mode==="tv"?d.shows.length:d.items.length;
+    api("/api/config").then(showFolders).catch(()=>{});
     finish((refresh?`Library loaded: ${noun(n)}.`:`Scan complete: ${noun(n)} found.`)+changeText(d.changes))}
   catch(e){finish(e.message,true);if(!rows.length){$("#tbl").hidden=true;$("#msg").hidden=false;$("#msg").textContent="Nothing scanned yet."}}
 }
@@ -861,6 +864,19 @@ $("#dGo").onclick=async()=>{
   done();
 };
 
+/* ---------- several library folders per type ---------- */
+let savedFolders={movies:[],tv:[]};
+function showFolders(c){
+  if(c){savedFolders={movies:c.folders||[],tv:c.tv_folders||[]}}
+  const list=savedFolders[mode]||[],cur=$("#folder").value;
+  $("#folderList").innerHTML=list.map(f=>`<option value="${esc(f)}">`).join("");
+  $("#pickBox").hidden=list.length<2;
+  $("#folderPick").innerHTML=list.map(f=>`<option value="${esc(f)}"${f.toLowerCase()===cur.toLowerCase()?" selected":""}>${esc(f)}</option>`).join("");
+}
+$("#folderPick").onchange=()=>{if(jobId)return;$("#folder").value=$("#folderPick").value;rows=[];shows=[];scanFolder(true)};
+$("#folderForget").onclick=async()=>{const f=$("#folderPick").value;if(!f||!confirm(`Remove “${f}” from the list? Nothing on disk changes, and you can add it again by scanning it.`))return;
+  try{const c=await api("/api/folders/forget",{folder:f,kind:mode==="tv"?"tv":"movies"});showFolders(c)}catch(e){status(e.message,true)}};
+
 /* ---------- rename patterns: live examples (the app does the same when renaming) ---------- */
 const PAT_NAMES=["movie_folder","movie_file","tv_show_folder","tv_season_folder","tv_episode_file"];
 let patDefaults={};
@@ -998,7 +1014,7 @@ function applyMode(){
   $("#msg").textContent=mode==="tv"?"Enter the folder that holds your TV shows (one folder per show), then choose Scan folder.":"Enter the folder that holds your movies, then choose Scan folder. Next time, your library opens automatically.";
   $("#prog").hidden=true;$("#collBtn").hidden=mode==="tv";
 }
-function switchMode(m){if(m===mode||jobId)return;mode=m;localStorage.setItem("mm-mode",m);applyMode();loadLibrary()}
+function switchMode(m){if(m===mode||jobId)return;mode=m;localStorage.setItem("mm-mode",m);applyMode();showFolders();loadLibrary()}
 $("#tabMovies").onclick=()=>switchMode("movies");
 $("#tabTv").onclick=()=>switchMode("tv");
 
@@ -1141,7 +1157,7 @@ addEventListener("pagehide",()=>navigator.sendBeacon("/api/bye"));
 
 applyMode();
 loadLibrary();
-fetch("/api/config").then(r=>r.json()).then(c=>{const f=mode==="tv"?c.tv_folder:c.folder;if(f&&!$("#folder").value)$("#folder").value=f;showSettings(c);if(!c.has_key)$("#setMsg").innerHTML+=" <strong>Add your key to start matching.</strong>"}).catch(()=>{});
+fetch("/api/config").then(r=>r.json()).then(c=>{const f=mode==="tv"?c.tv_folder:c.folder;if(f&&!$("#folder").value)$("#folder").value=f;showSettings(c);showFolders(c);if(!c.has_key)$("#setMsg").innerHTML+=" <strong>Add your key to start matching.</strong>"}).catch(()=>{});
 </script>
 </body>
 </html>

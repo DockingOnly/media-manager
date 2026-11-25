@@ -129,7 +129,7 @@ def scan(root: Path, job: dict = None, label: str = "Reading episode names") -> 
                 videos.append(path)
     if job:
         core.job_step(job, label, len(videos))
-    cache = core.load_json(core.TV_LIBRARY, {})
+    cache = core.load_scan("tv", root)
     known = ({it["id"]: it for it in cache.get("items", [])}
              if cache.get("root") == key_of(root) and cache.get("v") == TV_VERSION else {})
     items = []
@@ -149,7 +149,7 @@ def scan(root: Path, job: dict = None, label: str = "Reading episode names") -> 
         item.update(size=st.st_size, mtime=int(st.st_mtime), path=str(path.relative_to(root)), id=key_of(path))
         items.append(item)
     try:
-        core.save_json(core.TV_LIBRARY, {"root": key_of(root), "folder": str(root), "items": items, "v": TV_VERSION})
+        core.save_scan("tv", root, {"root": key_of(root), "folder": str(root), "items": items, "v": TV_VERSION})
     except OSError:
         pass
     return [dict(it) for it in items]

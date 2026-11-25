@@ -99,7 +99,7 @@ def scan(root: Path, job: dict = None, label: str = "Reading file names") -> lis
     if job:
         core.job_step(job, label, len(videos))
     # Reuse what we worked out last time for files that haven't changed; only new or changed files are read
-    cache = core.load_json(core.LIBRARY, {})
+    cache = core.load_scan("movies", root)
     known = {it["id"]: it for it in cache.get("items", [])} if cache.get("root") == key_of(root) else {}
     if cache.get("v") != PARSE_VERSION:  # parsing improved: re-read every name once (matches are kept)
         known = {k: {kk: vv for kk, vv in v.items() if kk in ("size", "mtime")} for k, v in known.items()}
@@ -140,7 +140,7 @@ def scan(root: Path, job: dict = None, label: str = "Reading file names") -> lis
                 it["part"] = None
     follow_renames(known, items)
     try:
-        core.save_json(core.LIBRARY, {"root": key_of(root), "folder": str(root), "items": items, "v": PARSE_VERSION})
+        core.save_scan("movies", root, {"root": key_of(root), "folder": str(root), "items": items, "v": PARSE_VERSION})
     except OSError:
         pass
     return [dict(it) for it in items]

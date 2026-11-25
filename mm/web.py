@@ -57,7 +57,9 @@ def index():
 def settings_view(cfg: dict) -> dict:
     key = cfg.get("tmdb_key") or ""
     os_key = cfg.get("os_key") or ""
-    return {"folder": cfg.get("folder", ""), "tv_folder": cfg.get("tv_folder", ""), "has_key": bool(key), "key_hint": key[-4:] if key else "",
+    return {"folder": cfg.get("folder", ""), "tv_folder": cfg.get("tv_folder", ""),
+            "folders": cfg.get("folders") or ([cfg["folder"]] if cfg.get("folder") else []),
+            "tv_folders": cfg.get("tv_folders") or ([cfg["tv_folder"]] if cfg.get("tv_folder") else []), "has_key": bool(key), "key_hint": key[-4:] if key else "",
             "language": cfg.get("language") or "en-US",
             "has_os_key": bool(os_key), "os_key_hint": os_key[-4:] if os_key else "",
             "os_user": cfg.get("os_user", ""), "has_os_pass": bool(cfg.get("os_pass")),
@@ -127,6 +129,13 @@ def api_settings():
                     "fanart_info": "fanart.tv accepted the key." if fanart_key else None})
 
 
+@app.post("/api/folders/forget")
+def api_forget_folder():
+    d = body()
+    cfg = core.forget_folder("tv" if d.get("kind") == "tv" else "movies", d.get("folder") or "")
+    return jsonify(settings_view(cfg))
+
+
 @app.post("/api/youtube-login/test")
 def api_youtube_login_test():
     data = body()
@@ -144,7 +153,7 @@ def api_scan():
     root = Path(folder)
     if not folder or not root.is_dir():
         return jsonify(error=f"Folder not found: {folder or '(empty)'}. Check the path and try again."), 400
-    core.save_config(folder=folder)
+    core.remember_folder("movies", folder)
     refresh = bool(data.get("refresh"))
 
     def work(job):
@@ -153,9 +162,8 @@ def api_scan():
             if core.state["root"] is not None and core.key_of(core.state["root"]) == core.key_of(root):
                 before = {it["id"] for it in core.state["items"]}
             else:
-                cache = core.load_json(core.LIBRARY, {})
-                before = ({it["id"] for it in cache.get("items", [])}
-                          if cache.get("root") == core.key_of(root) else None)
+                cache = core.load_scan("movies", root)
+                before = {it["id"] for it in cache.get("items", [])} if cache else None
             core.state["root"] = root
             items = [dict(i) for i in library.rescan(job, "Checking for changes" if refresh else "Reading file names")]
         after = {it["id"] for it in items}
@@ -176,8 +184,8 @@ def api_library():
         return jsonify(items=None, folder=folder, missing=True)
     with core.lock:
         if core.state["root"] is None or core.key_of(core.state["root"]) != core.key_of(root):
-            cache = core.load_json(core.LIBRARY, {})
-            if cache.get("root") != core.key_of(root):
+            cache = core.load_scan("movies", root)
+            if not cache:
                 return jsonify(items=None, folder=folder)  # nothing saved yet: the page will scan
             core.state["root"] = root
             core.state["items"] = cache.get("items", [])

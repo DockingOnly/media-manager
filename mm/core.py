@@ -291,6 +291,45 @@ def start_job(kind: str, label: str, total: int, work) -> str:
     return job["id"]
 
 
+# ---------------------------------------------------------------- several library folders
+
+def _scan_file(base: Path, root) -> Path:
+    import hashlib
+    return base.with_name(f"{base.stem}-{hashlib.sha1(key_of(root).encode()).hexdigest()[:10]}{base.suffix}")
+
+
+def load_scan(kind: str, root) -> dict:
+    """The saved scan of one library folder (each folder has its own, so switching between them is instant).
+    Falls back to the single file older versions kept."""
+    base = TV_LIBRARY if kind == "tv" else LIBRARY
+    data = load_json(_scan_file(base, root), {})
+    if not data:
+        old = load_json(base, {})
+        data = old if old.get("root") == key_of(root) else {}
+    return data
+
+
+def save_scan(kind: str, root, data: dict) -> None:
+    save_json(_scan_file(TV_LIBRARY if kind == "tv" else LIBRARY, root), data)
+
+
+def remember_folder(kind: str, folder: str) -> dict:
+    """Make a folder the current one, and remember it for the Library dropdown (most recent first)."""
+    key = "tv_folders" if kind == "tv" else "folders"
+    current = "tv_folder" if kind == "tv" else "folder"
+    with lock:
+        cfg = load_config()
+        known = [f for f in (cfg.get(key) or ([cfg[current]] if cfg.get(current) else [])) if key_of(f) != key_of(folder)]
+        return save_config(**{current: folder, key: [folder] + known[:11]})
+
+
+def forget_folder(kind: str, folder: str) -> dict:
+    key = "tv_folders" if kind == "tv" else "folders"
+    with lock:
+        cfg = load_config()
+        return save_config(**{key: [f for f in cfg.get(key) or [] if key_of(f) != key_of(folder)]})
+
+
 def require_tv_scan() -> Path:
     if tv_state["root"] is None or not tv_state["root"].is_dir():
         raise UserError("Scan your TV shows folder first.")
