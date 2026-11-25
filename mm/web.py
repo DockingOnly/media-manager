@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 from flask import Flask, jsonify, request
 
-from . import artwork, core, library, movie, nfo, renamer, subtitles, tmdbapi, trailers
+from . import artwork, collections, core, library, movie, nfo, renamer, subtitles, tmdbapi, trailers
 from .core import UserError
 
 app = Flask(__name__, static_folder=str(core.BASE / "static"), static_url_path="")
@@ -271,6 +271,13 @@ def api_artwork():
     root = core.require_scan()
     tmdbapi.tmdb("/configuration")  # fail fast on a missing or bad key
     return job_response("artwork", "Checking for changes", 0, lambda job: artwork.run(job, root, kinds, replace))
+
+
+@app.post("/api/collections")
+def api_collections():
+    root = core.require_scan()
+    tmdbapi.tmdb("/configuration")
+    return job_response("collections", "Checking for changes", 0, lambda job: collections.run(job, root))
 
 
 @app.post("/api/open-folder")

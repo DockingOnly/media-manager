@@ -42,8 +42,10 @@ def build_nfo(d: dict) -> bytes:
     if keys:  # lets Jellyfin play the trailer from YouTube when there is no local file
         sub(movie, "trailer", f"plugin://plugin.video.youtube/?action=play_video&videoid={keys[0]}")
     if d.get("belongs_to_collection"):
-        coll = sub(movie, "set")
-        sub(coll, "name", d["belongs_to_collection"].get("name"))
+        c = d["belongs_to_collection"]
+        coll = sub(movie, "set", tmdbcolid=c.get("id"))  # Jellyfin and Kodi read the collection's TMDB id from here
+        sub(coll, "name", c.get("name"))
+        sub(movie, "uniqueid", c.get("id"), type="tmdbSet")
     for g in d.get("genres", []):
         sub(movie, "genre", g.get("name"))
     for c in d.get("production_countries", []):

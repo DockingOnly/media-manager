@@ -151,7 +151,13 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 .eps tr.gone td{color:var(--muted)}
 .orders{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:0 0 10px;background:var(--bg)}
 .orders li{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line)}
-.orders li:last-child{border-bottom:0}.orders ul{list-style:none;margin:6px 0 0;padding:0}
+.orders li:last-child{border-bottom:0}
+.colls{list-style:none;margin:0;padding:0}
+.colls>li{display:flex;gap:14px;padding:12px 0;border-bottom:1px solid var(--line)}
+.colls img,.colls .ph{width:70px;height:105px;object-fit:cover;border-radius:4px;background:var(--track);flex:none}
+.colls .films{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px;font-size:.9em}
+.colls .films button{background:none;border:0;padding:0;color:var(--ready);font-weight:400;text-decoration:underline}
+.colls .miss{color:var(--todo)}.colls .soon{color:var(--muted)}.orders ul{list-style:none;margin:6px 0 0;padding:0}
 </style>
 </head>
 <body>
@@ -221,6 +227,7 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
   <button class="ghost" id="renameBtn">Preview renames…</button>
   <button class="ghost" id="nfoBtn">Write .nfo files…</button>
   <button class="ghost" id="artBtn">Download artwork…</button>
+  <button class="ghost" id="collBtn">Collections…</button>
   <button class="ghost" id="trBtn">Download trailers…</button>
   <button class="ghost" id="subBtn">Download subtitles…</button>
 </div>
@@ -328,6 +335,13 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
   </div>
 </div></dialog>
 
+<dialog id="collDlg" class="wide" aria-labelledby="cTitle"><div class="dlg">
+  <div class="head"><h2 id="cTitle">Collections</h2><div class="note" id="cSum"></div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="cOnlyMissing" checked> Only collections with missing movies</label></div>
+  <div class="body"><ul class="colls" id="cList"></ul></div>
+  <div class="foot"><span class="grow note">Jellyfin builds these collections from the .nfo files (with “Automatically add to collection” on in its library settings) and fetches their artwork itself.</span><button class="ghost" id="cClose">Close</button></div>
+</div></dialog>
+
 <dialog id="shDlg" class="wide" aria-labelledby="shName"><div class="dlg">
   <div class="hero" id="shHero"><img id="shPoster" alt=""><div><h2 id="shName">Loading…</h2><div class="note" id="shMeta"></div></div></div>
   <div class="body" id="shView"></div>
@@ -419,7 +433,7 @@ async function api(url,data,method){
 function busy(btn,text){const old=btn.textContent;btn.disabled=true;btn.textContent=text;return()=>{btn.disabled=false;btn.textContent=old}}
 /* ---------- progress ---------- */
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const JOB_BUTTONS=["#scan","#matchAll","#renameBtn","#nfoBtn","#artBtn","#trBtn","#subBtn"];
+const JOB_BUTTONS=["#scan","#matchAll","#renameBtn","#nfoBtn","#artBtn","#collBtn","#trBtn","#subBtn"];
 let jobId=null;
 function prog(cls){const p=$("#prog");p.hidden=false;p.className="prog"+(cls?" "+cls:"")}
 function status(t,err){  // a message with no bar
@@ -916,6 +930,29 @@ function summaryTv(){
   $("#summary").hidden=$("#tools").hidden=$("#actions").hidden=false;
 }
 
+/* ---------- collections ---------- */
+let colls=null;
+function renderColls(){
+  const only=$("#cOnlyMissing").checked,list=(colls.collections||[]).filter(c=>!only||c.missing.some(m=>m.released));
+  const complete=colls.collections.filter(c=>!c.missing.some(m=>m.released)).length;
+  $("#cSum").textContent=`${plural(colls.collections.length,"collection")} in your library: ${complete} complete, ${colls.collections.length-complete} with released movies missing.`;
+  $("#cList").innerHTML=list.map(c=>`<li>${c.poster?`<img src="${esc(c.poster)}" alt="" loading="lazy">`:'<span class="ph"></span>'}<div>
+    <strong>${esc(c.name)}</strong> <span class="note">· ${c.have.length} of ${c.have.length+c.missing.length}</span>
+    <a class="note" href="https://www.themoviedb.org/collection/${c.id}" target="_blank" rel="noopener">TMDB</a>
+    <div class="films">${c.have.map(h=>`<button data-movie="${esc(h.item_id)}" title="Open">${esc(h.title)}${h.year?` (${h.year})`:""}</button>`).join("")}
+      ${c.missing.map(m=>`<span class="${m.released?"miss":"soon"}" title="${m.released?"You don't have this one":"Not released yet"}">${m.released?"✗":"◷"} ${esc(m.title)}${m.year?` (${m.year})`:""}</span>`).join("")}</div></div></li>`).join("")
+    ||'<li class="note">Every collection in your library is complete.</li>';
+}
+$("#collBtn").onclick=async()=>{
+  try{colls=await runJob("/api/collections",{},"Checking for changes",true);
+    finish(`Collections checked: ${plural(colls.collections.length,"collection")} across ${plural(colls.movies,"movie")}.`+(colls.failed.length?` ${colls.failed.length} couldn't be checked: ${colls.failed.map(f=>`${f.name} (${f.error})`).join("; ")}`:""),!!colls.failed.length);
+    renderColls();$("#collDlg").showModal()}
+  catch(e){finish(e.message,true)}
+};
+$("#cOnlyMissing").onchange=()=>colls&&renderColls();
+$("#cClose").onclick=()=>$("#collDlg").close();
+$("#cList").onclick=e=>{const b=e.target.closest("[data-movie]");if(b){$("#collDlg").close();openDetail(b.dataset.movie)}};
+
 /* ---------- switching between Movies and TV shows ---------- */
 function applyMode(){
   COLS=mode==="tv"?TV_COLS:MOVIE_COLS;key="match";dir=1;rows=[];shows=[];
@@ -927,7 +964,7 @@ function applyMode(){
   $("#show").innerHTML=(mode==="tv"?TV_FILTERS:MOVIE_FILTERS).map(([v,l])=>`<option value="${v}">${l}</option>`).join("");
   $("#summary").hidden=$("#tools").hidden=$("#actions").hidden=true;$("#tbl").hidden=true;$("#msg").hidden=false;
   $("#msg").textContent=mode==="tv"?"Enter the folder that holds your TV shows (one folder per show), then choose Scan folder.":"Enter the folder that holds your movies, then choose Scan folder. Next time, your library opens automatically.";
-  $("#prog").hidden=true;
+  $("#prog").hidden=true;$("#collBtn").hidden=mode==="tv";
 }
 function switchMode(m){if(m===mode||jobId)return;mode=m;localStorage.setItem("mm-mode",m);applyMode();loadLibrary()}
 $("#tabMovies").onclick=()=>switchMode("movies");
