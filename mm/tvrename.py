@@ -7,7 +7,7 @@ import os
 import time
 from pathlib import Path
 
-from . import core, nfo, tvlib, tvmeta, tvsort
+from . import core, library, nfo, tvlib, tvmeta, tvsort
 from .core import key_of, rel, same_file
 
 MAX_TITLE = 90  # keeps paths well inside Windows' limits
@@ -87,6 +87,9 @@ def plan() -> dict:
                     p["reason"] = f"Two files would both become “{rel(dst, root)}”."
                 claimed[key_of(dst)] = True
                 p["ops"].append({"kind": "file", "src": str(src), "dst": str(dst)})
+        for op in p["ops"]:  # never into a hidden folder (tinyMediaManager's .deletedByTMM, $RECYCLE.BIN, ...)
+            if op.get("dst") and any(part.startswith(library.SKIP_PREFIXES) for part in Path(op["dst"]).relative_to(root).parts):
+                p["reason"] = f"“{rel(Path(op['dst']), root)}” is inside a hidden folder."
         if p["ops"]:
             plans.append(p)
         elif p["left_alone"]:
