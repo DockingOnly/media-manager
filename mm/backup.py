@@ -19,7 +19,8 @@ KEEP = 10
 enabled = False   # only the app and the command line make backups, not tests
 _lock = threading.Lock()
 WHAT = {"CONFIG": "Settings", "MATCHES": "Movie matches", "TV_MATCHES": "TV show matches", "EDITS": "Your metadata edits",
-        "RENAME_LOG": "Movie rename undo", "TV_RENAME_LOG": "TV rename undo", "HISTORY": "History"}
+        "RENAME_LOG": "Movie rename undo", "TV_RENAME_LOG": "TV rename undo", "HISTORY": "History",
+        "SMART": "Smart collections"}
 REASONS = {"daily": "Daily", "manual": "Made by you", "before-restore": "Before a restore"}
 
 

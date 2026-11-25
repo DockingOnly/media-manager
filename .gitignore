@@ -30,3 +30,7 @@ probe_cache.json
 history.json
 backups/
 logs/
+convert.json
+smart_collections.json
+badges.json
+badge-originals/

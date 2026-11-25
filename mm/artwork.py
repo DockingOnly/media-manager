@@ -230,6 +230,8 @@ def run(job: dict, root: Path, kinds: list, replace: bool) -> dict:
                 _cache.pop(key, None)
             core.tick(job)
     res["cancelled"] = job["cancel"]
+    from . import badges
+    badges.keep_up(items, root)  # badges on the new posters, when they're switched on
     with core.lock:
         res["items"] = [dict(i) for i in library.rescan()]
     return res

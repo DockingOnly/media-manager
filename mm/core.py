@@ -22,6 +22,9 @@ TV_RENAME_LOG = BASE / "tv_rename_log.json"
 HISTORY = BASE / "history.json"       # what the app changed, newest last (the History window)
 PROBES = BASE / "probe_cache.json"      # what ffmpeg said about each video (so it's read once, not every time)
 BACKUPS = BASE / "backups"              # daily copies of your matches, edits and settings (backup.py)
+CONVERT = BASE / "convert.json"         # files waiting to be converted, and how earlier ones went (convert.py)
+SMART = BASE / "smart_collections.json"  # your smart collections and their Jellyfin ids (smart.py)
+BADGES = BASE / "badges.json"          # posters with badges, and where their originals are kept (badges.py)
 PORT = 8765
 USER_AGENT = "media-manager/0.8"
 
@@ -277,6 +280,13 @@ def note(do: str, **data) -> None:
 
 
 automatic = threading.Event()  # set while the folder watcher is working, so its History entries say so
+
+
+def last_note(**extra) -> None:
+    """Add details to the change just noted (such as which file replaced one sent to the Recycle Bin)."""
+    a = getattr(_act, "cur", None)
+    if a is not None and a["items"]:
+        a["items"][-1].update({k: str(v) for k, v in extra.items()})
 
 
 def begin_activity(kind: str, title: str, library: str = "") -> bool:

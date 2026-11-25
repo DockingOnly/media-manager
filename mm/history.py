@@ -23,7 +23,8 @@ JOB_TITLES = {"rename": "Renamed movies", "tvrename": "Renamed TV episodes", "nf
               "trailers": "Downloaded movie trailers", "tvtrailers": "Downloaded TV trailers",
               "subtitles": "Downloaded movie subtitles", "tvsubtitles": "Downloaded TV subtitles",
               "bulk": "Edited several at once", "trakt": "Watched status from Trakt", "match": "Matched movies",
-              "tvmatch": "Matched shows", "scan": "Scanned movies", "tvscan": "Scanned TV"}
+              "tvmatch": "Matched shows", "scan": "Scanned movies", "tvscan": "Scanned TV",
+              "convert": "Converted to a smaller format", "badges": "Added poster badges", "badges-remove": "Removed poster badges"}
 PATH_TITLES = {"/api/delete": "Deleted a movie", "/api/tv/delete": "Deleted from a show", "/api/dupes/recycle": "Recycled duplicates",
                "/api/leftovers/recycle": "Tidied leftovers", "/api/rename/undo": "Undid a movie rename",
                "/api/tv/rename/undo": "Undid a TV rename", "/api/movie/edit": "Edited a movie", "/api/tv/edit": "Edited a show",
@@ -190,6 +191,9 @@ def restore(entry_id: str, index: int = None) -> dict:
         done, failed = [], []
         for i, it in todo:
             try:
+                newer = Path(it["replaced_by"]) if it.get("replaced_by") else None
+                if newer is not None and newer.exists() and recyclebin.find(it.get("binned") or it["path"], e["time"]):
+                    core.discard(newer)  # the converted copy makes way for the original (and stays in the bin)
                 where = recyclebin.restore(it.get("binned") or it["path"], to=it["path"], near=e["time"])
                 it["restored"] = time.time()
                 core.note("restored", path=where)

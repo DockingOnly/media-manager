@@ -42,21 +42,28 @@ def check_url(url: str) -> str:
     return url
 
 
-def request(method: str, path: str, body=None, url: str = None, key: str = None, timeout: int = 15):
+class NotFound(UserError):
+    """Jellyfin doesn't have that (any more)."""
+
+
+def request(method: str, path: str, body=None, url: str = None, key: str = None, timeout: int = 15,
+            raw: bytes = None, content_type: str = "application/json"):
     s = settings()
     url, key = (url or s["url"]), (key or s["key"])
     if not (url and key):
         raise UserError("Add your Jellyfin address and API key in Settings first.")
-    data = json.dumps(body).encode() if body is not None else None
+    data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
     req = urllib.request.Request(url + path, data=data, method=method, headers={
         "Authorization": f'MediaBrowser Client="Media manager", Token="{key}"',
-        "Content-Type": "application/json", "Accept": "application/json", "User-Agent": core.USER_AGENT})
+        "Content-Type": content_type, "Accept": "application/json", "User-Agent": core.USER_AGENT})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read()
     except urllib.error.HTTPError as err:
         if err.code in (401, 403):
             raise UserError("Jellyfin refused the API key. Create one in Jellyfin under Dashboard → API Keys.")
+        if err.code == 404:
+            raise NotFound("Jellyfin doesn't have that any more.")
         raise UserError(f"Jellyfin answered with an error ({err.code}).")
     except (urllib.error.URLError, TimeoutError, OSError):
         raise UserError(f"Couldn't reach Jellyfin at {url}. Check the address, and that Jellyfin is running.")
@@ -119,14 +126,20 @@ def check(url: str = None, key: str = None, map_text: str = None) -> dict:
 
 # ---------------------------------------------------------------- finding a movie or show in Jellyfin
 
-def find_item(path: str, title: str, kind: str = "Movie") -> dict:
-    """Jellyfin's page for a movie file or a show folder: {'url', 'name'}. Found by path, so the right copy opens."""
+def admin_user() -> dict:
+    """A Jellyfin user to look things up as (an administrator, who sees every library)."""
     users = request("GET", "/Users") or []
     user = next((u for u in users if (u.get("Policy") or {}).get("IsAdministrator")), users[0] if users else None)
     if not user:
         raise UserError("Jellyfin has no users to look this up with.")
+    return user
+
+
+def find_item(path: str, title: str, kind: str = "Movie") -> dict:
+    """Jellyfin's page for a movie file or a show folder: {'url', 'name'}. Found by path, so the right copy opens."""
+    user = admin_user()
     q = urllib.parse.urlencode({"Recursive": "true", "IncludeItemTypes": kind, "Fields": "Path", "Limit": 50,
-                                "SearchTerm": (title or "")[:60]})
+                                "SearchTerm": (title or "")[:60], "CollapseBoxSetItems": "false"})
     found = (request("GET", f"/Users/{user['Id']}/Items?{q}") or {}).get("Items") or []
     want = to_jellyfin(path)
     norm = lambda x: (x or "").replace("\\", "/").rstrip("/").lower()

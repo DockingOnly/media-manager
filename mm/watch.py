@@ -188,9 +188,12 @@ def loop(say=None) -> None:
             continue
         last = time.time()
         try:
-            for r in check_once():
+            handled = check_once()
+            for r in handled:
                 if say:
                     say(describe(r))
+            from . import smart
+            smart.maybe_sync(handled)  # smart collections in Jellyfin follow what was added
         except Exception as err:  # never let this stop the app
             state["error"] = f"Watching stopped for a moment: {err}"
 

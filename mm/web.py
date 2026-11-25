@@ -10,8 +10,8 @@ from urllib.parse import urlsplit
 
 from flask import Flask, Response, g, jsonify, request
 
-from . import (artwork, backup, bulk, collections, core, dupes, export, history, jellyfin, leftovers, library, logs, movie, nfo,
-               notify, playback, renamer, subtitles, tmdbapi, trailers, trakt, vault, watch)
+from . import (artwork, backup, badges, bulk, collections, convert, core, dupes, export, history, jellyfin, leftovers, library, logs,
+               movie, nfo, notify, playback, renamer, smart, subtitles, tmdbapi, trailers, trakt, vault, watch)
 from .core import UserError
 
 app = Flask(__name__, static_folder=str(core.BASE / "static"), static_url_path="")
@@ -607,6 +607,144 @@ def api_notify_test():
     return jsonify(ok=True)
 
 
+# ---------------------------------------------------------------- converting to H.265 / AV1
+
+def _kind() -> str:
+    return "tv" if (request.args.get("kind") or (request.get_json(silent=True) or {}).get("kind")) == "tv" else "movies"
+
+
+@app.get("/api/convert")
+def api_convert():
+    found = convert.encoders()
+    cfg = core.load_config()
+    drives = {}
+    for key in ("folder", "tv_folder"):
+        f = cfg.get(key)
+        if f and Path(f).is_dir():
+            d = os.path.splitdrive(str(Path(f).resolve()))[0] or f
+            if d not in drives:
+                drives[d] = core.recycle_capacity(Path(f))
+    return jsonify(settings=convert.settings(cfg), status=convert.status(),
+                   encoders={c: [{"id": e, "label": convert.encoder_label(e)} for e in found.get(c, [])] for c in convert.CODECS},
+                   bins=[{"drive": d, "capacity": cap} for d, cap in drives.items()])
+
+
+@app.get("/api/convert/candidates")
+def api_convert_candidates():
+    s = convert.settings()
+    return jsonify(convert.candidates(_kind(), s["quality"], s["codec"]))
+
+
+@app.post("/api/convert/settings")
+def api_convert_settings():
+    d = body()
+    changes = {}
+    if d.get("codec") in convert.CODECS:
+        changes["convert_codec"] = d["codec"]
+    if d.get("quality") in convert.QUALITY:
+        changes["convert_quality"] = d["quality"]
+    if d.get("encoder") in ("auto", "gpu", "cpu"):
+        changes["convert_encoder"] = d["encoder"]
+    if "check" in d:
+        changes["convert_check"] = bool(d["check"])
+    cfg = core.save_config(**changes)
+    return jsonify(settings=convert.settings(cfg))
+
+
+@app.post("/api/convert/queue")
+def api_convert_queue():
+    d = body()
+    paths = [p for p in (d.get("paths") or []) if isinstance(p, str)]
+    if not paths:
+        raise UserError("Choose some files to convert first.")
+    convert.add(paths, _kind())
+    return jsonify(convert.start() if d.get("start") else convert.status())
+
+
+@app.post("/api/convert/remove")
+def api_convert_remove():
+    d = body()
+    return jsonify(convert.remove([p for p in (d.get("paths") or []) if isinstance(p, str)] or None))
+
+
+@app.post("/api/convert/start")
+def api_convert_start():
+    return jsonify(convert.start())
+
+
+@app.post("/api/convert/stop")
+def api_convert_stop():
+    return jsonify(convert.stop(bool(body().get("now"))))
+
+
+@app.get("/api/convert/status")
+def api_convert_status():
+    return jsonify(convert.status())
+
+
+# ---------------------------------------------------------------- smart collections in Jellyfin
+
+@app.get("/api/smart")
+def api_smart():
+    return jsonify(collections=smart.listing(), presets=smart.PRESETS, jellyfin=jellyfin.configured())
+
+
+@app.post("/api/smart/preview")
+def api_smart_preview():
+    d = body()
+    return jsonify(smart.preview(d.get("kind") or "movies", d.get("query") or "", d.get("tmdb_list") or ""))
+
+
+@app.post("/api/smart/save")
+def api_smart_save():
+    return jsonify(smart.save(body()))
+
+
+@app.post("/api/smart/delete")
+def api_smart_delete():
+    return jsonify(collections=smart.delete(body().get("id") or ""))
+
+
+@app.post("/api/smart/sync")
+def api_smart_sync():
+    return jsonify(smart.sync_all())
+
+
+# ---------------------------------------------------------------- poster badges
+
+@app.get("/api/badges")
+def api_badges():
+    return jsonify(settings=badges.settings(), count=badges.count())
+
+
+@app.post("/api/badges/settings")
+def api_badges_settings():
+    d = body()
+    show = d.get("show") if isinstance(d.get("show"), dict) else {}
+    cfg = core.save_config(badges_on=bool(d.get("on")), badge_show={k: bool(show.get(k)) for k in badges.KINDS},
+                           badge_position="bottom" if d.get("position") == "bottom" else "top")
+    return jsonify(settings=badges.settings(cfg), count=badges.count())
+
+
+@app.get("/api/badges/preview")
+def api_badges_preview():
+    a = request.args
+    show = {k: a.get(k) == "1" for k in badges.KINDS}
+    data, mime = badges.preview(a.get("id", ""), show, a.get("position", "top"), plain=a.get("plain") == "1")
+    return Response(data, mimetype=mime, headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/badges/apply")
+def api_badges_apply():
+    root = core.require_scan()
+    return job_response("badges", "Adding badges to posters", 0, lambda job: {**badges.apply_all(job, root=root), "count": badges.count()})
+
+
+@app.post("/api/badges/remove")
+def api_badges_remove():
+    return job_response("badges-remove", "Removing badges", 0, lambda job: {**badges.remove_all(job), "count": badges.count()})
+
+
 # ---------------------------------------------------------------- renaming, .nfo, deleting
 
 @app.get("/api/rename/preview")
@@ -703,7 +841,10 @@ def api_ping():
     with core.job_lock:
         running = next(({"id": j["id"], "label": j["label"]} for j in core.jobs.values() if not j["finished"]), None)
     w = watch.state
-    return jsonify(ok=True, version=APP_VERSION, job=running,
+    cur = convert.state["current"]
+    conv = {"running": True, "name": (cur or {}).get("name"), "percent": (cur or {}).get("percent"),
+            "phase": (cur or {}).get("phase")} if convert.busy() else None
+    return jsonify(ok=True, version=APP_VERSION, job=running, convert=conv,
                    watch={"version": w["version"], "busy": w["busy"], "message": watch.describe(w["last"]),
                           "kind": (w["last"] or {}).get("kind"), "waiting": w["waiting"], "error": w["error"],
                           "last_check": w["last_check"]},
@@ -719,7 +860,7 @@ def api_bye():
 def watchdog() -> None:
     while True:
         time.sleep(2)
-        if alive["last"] is None or core.job_running() or watch.state["busy"]:  # never opened yet, or busy: keep going
+        if alive["last"] is None or core.job_running() or watch.state["busy"] or convert.busy():  # never opened yet, or busy: keep going
             continue
         if watch.settings()["on"] and watch.settings()["keep_alive"]:  # watching for new files after the page closes
             continue

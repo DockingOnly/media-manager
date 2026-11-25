@@ -21,6 +21,10 @@ collections  collections (movie sets): which you have, which films are missing
 artwork    posters, backdrops, logos, thumbnails, banners, clear art, disc art (TMDB + fanart.tv)
 trailers   trailer downloads (TMDB + YouTube)
 subtitles  subtitle downloads (OpenSubtitles.com)
+convert    older video formats to H.265 / AV1, only where it pays off, checked (VMAF) before replacing
+query      the filter box's language (res:4k year:<2000 ...) on the server
+smart      smart collections: Jellyfin collections that follow a filter rule or a TMDB list
+badges     4K / HDR / Atmos / rating badges on movie posters, originals kept
 web        the local web app and its API
 tvlib      TV: scanning, reading episode names, grouping into shows, what each show has
 tvmeta     TV: TMDB show matching (tvshow.nfo IDs first) and episode details, missing episodes
