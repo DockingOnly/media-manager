@@ -1,0 +1,21 @@
+"""Media manager: a Jellyfin-focused movie library manager.
+
+core       settings, storage, background tasks, file helpers
+library    scanning, reading file names, folder rules, what each movie has, deleting
+tmdbapi    TMDB search and matching (using IDs from existing .nfo files first)
+movie      one movie: details, files, artwork, metadata edits, open folder
+renamer    Jellyfin renaming with preview and undo
+nfo        .nfo files (read, write, merge, edit)
+artwork    posters, backdrops, logos, thumbnails, banners, clear art, disc art (TMDB + fanart.tv)
+trailers   trailer downloads (TMDB + YouTube)
+subtitles  subtitle downloads (OpenSubtitles.com)
+web        the local web app and its API
+tvlib      TV: scanning, reading episode names, grouping into shows, what each show has
+tvmeta     TV: TMDB show matching (tvshow.nfo IDs first) and episode details, missing episodes
+tvrename   TV: Show (Year)/Season N/Show - S01E02 - Title, with preview and undo
+tvnfo      TV: tvshow.nfo, season.nfo and episode .nfo files
+tvart      TV: show artwork, season posters, episode thumbnails
+tvextras   TV: subtitles per episode, trailers per show
+tvshow     TV: one show's details, seasons, episodes, edits, deleting
+tvweb      TV: the /api/tv/... endpoints
+"""

@@ -1,0 +1,1056 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Movie library</title>
+<style>
+:root{--bg:#eef1f4;--surface:#fff;--ink:#16212b;--muted:#5d6b79;--line:#d9e0e6;--accent:#0b7fa8;--on-accent:#fff;--ready:#1b8a5a;--todo:#b4540a;--danger:#c0392b;--track:#d9e0e6;--hover:#f4f7f9}
+@media(prefers-color-scheme:dark){:root{--bg:#10171d;--surface:#17212a;--ink:#e6edf3;--muted:#92a1af;--line:#26323d;--accent:#4cb9e0;--on-accent:#08222d;--ready:#4cc48a;--todo:#f0a15c;--danger:#ef6b5b;--track:#26323d;--hover:#1d2933}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+a{color:var(--accent)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,-apple-system,sans-serif}
+main{max-width:1500px;margin:0 auto;padding:28px 20px 60px}
+header{display:flex;align-items:center;justify-content:space-between;margin:0 0 18px}
+h1{font-size:1.4rem;font-weight:650;margin:0;letter-spacing:-.01em}
+h2{font-size:1.05rem;font-weight:650;margin:0 0 12px}
+.bar,.tools,.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.tools{margin-bottom:10px}
+.actions{margin:0 0 14px}
+input,select,button{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 12px}
+#folder,#filter{flex:1;min-width:240px}
+button{cursor:pointer;background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+button.ghost{background:var(--surface);border-color:var(--line);color:var(--ink)}
+button:disabled{opacity:.6;cursor:wait}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px;margin:0 0 18px}
+.panel label{display:block;font-weight:600;margin:0 0 4px}
+.panel .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.panel .row>div{display:flex;flex-direction:column}
+.panel small,.note{color:var(--muted)}
+#key{width:340px}#lang{width:110px}
+#summary{margin:22px 0 14px}
+#summary p{margin:0 0 8px;color:var(--muted)}
+#summary strong{color:var(--ink);font-variant-numeric:tabular-nums}
+.meter{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--track)}
+.meter span{display:block;height:100%}
+.meter .r{background:var(--ready)}.meter .t{background:var(--todo)}
+.prog{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin:14px 0 0}
+.prog .ptext{display:flex;justify-content:space-between;gap:12px}
+.prog .ptext #pLabel{font-weight:600}
+.prog.fail .ptext #pLabel{color:var(--todo)}
+.prog.done .ptext #pLabel{color:var(--ready)}
+.ptext .right{display:flex;gap:10px;align-items:center}
+button.small{padding:3px 10px;font-size:.88em}
+#pDetail{color:var(--muted);font-weight:400}
+#pCount{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.pbar{height:8px;border-radius:4px;background:var(--track);overflow:hidden;margin-top:8px}
+.pbar span{display:block;height:100%;width:0;background:var(--accent);transition:width .25s}
+.prog.done .pbar span{background:var(--ready)}.prog.fail .pbar span{background:var(--todo)}
+.pbar.indet span{width:30%!important;animation:slide 1.1s ease-in-out infinite}
+@keyframes slide{from{transform:translateX(-110%)}to{transform:translateX(350%)}}
+@media(prefers-reduced-motion:reduce){.pbar span{transition:none}.pbar.indet span{animation:none;width:100%!important;opacity:.4}}
+.wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:8px 12px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:600;cursor:pointer;user-select:none}
+th[aria-sort]{color:var(--ink)}
+th.num,td.num{text-align:right}
+td.file{color:var(--muted)}
+td.file div{max-width:25vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tag{display:inline-flex;align-items:center;gap:6px}
+.tag::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor}
+.tag.r{color:var(--ready)}.tag.t{color:var(--todo)}.tag.n{color:var(--muted)}
+.mbtn{display:flex;align-items:center;gap:8px;background:none;border:0;padding:2px 4px;color:var(--ink);font-weight:400;text-align:left;border-radius:4px}
+.mbtn:hover{background:var(--hover)}
+.mbtn img,.mbtn .ph{width:26px;height:39px;border-radius:3px;object-fit:cover;background:var(--track);flex:none}
+.mbtn .t1{display:block;line-height:1.25;white-space:normal;min-width:230px;max-width:340px}
+.mbtn .t2{display:block;font-size:.85em}
+.msg{padding:28px;color:var(--muted)}
+.err{color:var(--todo)}
+dialog.wide{width:min(1000px,96vw)}
+.artgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:10px;margin:6px 0 14px}
+.artcard{border:1px solid var(--line);border-radius:8px;padding:6px;display:flex;flex-direction:column;gap:6px}
+.artcard .pic{height:84px;border-radius:4px;background:var(--track);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.85em;overflow:hidden}
+.artcard img{max-width:100%;max-height:84px;object-fit:contain}
+.artcard .row{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:.88em}
+.picks{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}
+.picks button{display:flex;flex-direction:column;gap:6px;background:var(--surface);border:1px solid var(--line);color:var(--ink);font-weight:400;padding:6px;text-align:left}
+.picks button:hover{border-color:var(--accent)}
+.picks .pic{height:120px;background:var(--track);border-radius:4px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.picks img{max-width:100%;max-height:120px;object-fit:contain}
+.picks small{color:var(--muted)}
+.hero{position:relative;display:flex;gap:18px;padding:20px;border-bottom:1px solid var(--line);background:var(--surface) center 25%/cover no-repeat;min-height:150px}
+.hero::before{content:"";position:absolute;inset:0;background:var(--surface);opacity:.84}
+.hero>*{position:relative}
+.hero img{width:120px;aspect-ratio:2/3;object-fit:cover;border-radius:6px;background:var(--track);flex:none;box-shadow:0 2px 10px rgba(0,0,0,.35)}
+.hero h2{font-size:1.35rem;margin:2px 0 6px}
+.hero .tagline{font-style:italic;margin-top:8px}
+.facts{display:grid;grid-template-columns:max-content 1fr;gap:6px 16px;margin:14px 0}
+.facts dt{color:var(--muted)}.facts dd{margin:0}
+.cast{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0 14px;padding:0;list-style:none}
+.cast li{display:flex;align-items:center;gap:8px;width:210px;font-size:.9em}
+.cast img,.cast .ph{width:36px;height:36px;border-radius:50%;object-fit:cover;background:var(--track);flex:none}
+.cast small{display:block;color:var(--muted)}
+.files{list-style:none;margin:6px 0 0;padding:0;font-size:.9em}
+.files li{display:flex;gap:10px;padding:4px 0;border-bottom:1px solid var(--line)}
+.files .k{width:70px;color:var(--muted);flex:none}.files .n{flex:1;word-break:break-all}.files .s{color:var(--muted);flex:none}
+.edited{color:var(--accent);font-size:.85em;margin-left:6px}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
+.form label{display:flex;flex-direction:column;gap:4px;font-weight:600;font-size:.92em}
+.form .full{grid-column:1/-1}
+.form textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 12px;min-height:120px;resize:vertical}
+dialog{border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);padding:0;width:min(760px,94vw);max-height:88vh}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.dlg{display:flex;flex-direction:column;max-height:88vh}
+.dlg>.head{padding:16px 18px 10px;border-bottom:1px solid var(--line)}
+.dlg>.body{padding:14px 18px;overflow:auto;flex:1}
+.dlg>.foot{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;align-items:center}
+.dlg>.foot .grow{flex:1;color:var(--muted)}
+.results{list-style:none;margin:0;padding:0}
+.results li{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.results img,.results .ph{width:62px;height:93px;border-radius:4px;object-fit:cover;background:var(--track);flex:none}
+.results .info{flex:1;min-width:0}
+.results p{margin:2px 0 6px;color:var(--muted);font-size:.9em;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.results .cur{color:var(--ready);font-weight:600}
+.plan{border-bottom:1px solid var(--line);padding:10px 0}
+.plan label{display:flex;gap:8px;align-items:center;font-weight:600}
+.plan ul{margin:6px 0 0 28px;padding:0;list-style:none;font-size:.9em}
+.plan li{margin:2px 0;word-break:break-all}
+.plan .from{color:var(--muted)}
+.plan .arrow{color:var(--muted);margin:0 6px}
+.plan .why{color:var(--todo);margin:4px 0 0 28px;font-size:.9em}
+button.danger{background:var(--danger);border-color:var(--danger);color:#fff}
+.delbtn{background:none;border:0;color:var(--muted);padding:4px 6px;font-weight:400;line-height:0;border-radius:4px}
+.delbtn:hover{color:var(--danger);background:var(--hover)}
+.delbtn svg{width:16px;height:16px}
+.choice{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:8px;margin:0 0 8px;cursor:pointer}
+.choice:has(input:checked){border-color:var(--accent)}
+.choice input{margin-top:4px}
+.choice small{display:block;color:var(--muted)}
+.flist{margin:6px 0 0;padding:8px 12px;background:var(--bg);border-radius:6px;font-size:.88em;max-height:180px;overflow:auto;list-style:none;word-break:break-all}
+.warn{color:var(--danger);font-weight:600}
+.has{display:flex;gap:4px;flex-wrap:nowrap}
+.has span{font-size:.78em;font-weight:600;padding:1px 6px;border-radius:4px;border:1px solid var(--line);color:var(--muted);opacity:.55}
+.has span.y{color:var(--ready);border-color:var(--ready);opacity:1}
+.opts label{display:flex;gap:8px;align-items:center;margin:0 0 8px}
+header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.tabs{display:flex;gap:4px;background:var(--track);border-radius:8px;padding:3px}
+.tabs button{background:none;border:0;color:var(--muted);padding:6px 14px;border-radius:6px;font-weight:600}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.seasons details{border:1px solid var(--line);border-radius:8px;margin:0 0 8px}
+.seasons summary{display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer;list-style:none}
+.seasons summary::-webkit-details-marker{display:none}
+.seasons summary img,.seasons summary .ph{width:30px;height:45px;object-fit:cover;border-radius:3px;background:var(--track);flex:none}
+.seasons summary .sn{font-weight:600}.seasons summary .grow{flex:1}
+.eps{width:100%;border-collapse:collapse;font-size:.9em}
+.eps td{padding:5px 8px;border-top:1px solid var(--line);white-space:normal;vertical-align:top}
+.eps td.n{width:3em;color:var(--muted);text-align:right}.eps td.d{width:7em;color:var(--muted);white-space:nowrap}
+.eps .fn{color:var(--muted);font-size:.9em;word-break:break-all}
+.eps tr.gone td{color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div class="left"><h1 id="appTitle">Movie library</h1>
+    <div class="tabs" role="tablist" aria-label="Library"><button role="tab" id="tabMovies" aria-selected="true">Movies</button><button role="tab" id="tabTv" aria-selected="false">TV shows</button></div></div>
+  <button class="ghost" id="setBtn" aria-expanded="false" aria-controls="settings">Settings</button>
+</header>
+
+<section class="panel" id="settings" hidden>
+  <h2>Settings</h2>
+  <div class="row">
+    <div><label for="key">TMDB API key</label><input id="key" type="password" autocomplete="off" spellcheck="false"></div>
+    <div><label for="lang">Language</label><input id="lang" placeholder="en-US" spellcheck="false"></div>
+  </div>
+  <p class="note">Get a free key at themoviedb.org → Settings → API.</p>
+  <h2 style="margin-top:18px">Subtitles (OpenSubtitles.com)</h2>
+  <div class="row">
+    <div><label for="osKey">API key</label><input id="osKey" type="password" autocomplete="off" spellcheck="false" style="width:300px"></div>
+    <div><label for="osUser">Username</label><input id="osUser" autocomplete="off" spellcheck="false" style="width:170px"></div>
+    <div><label for="osPass">Password</label><input id="osPass" type="password" autocomplete="new-password" style="width:170px"></div>
+    <div><label for="subLangs">Languages</label><input id="subLangs" placeholder="en, es" spellcheck="false" style="width:120px"></div>
+  </div>
+  <p class="note">Create a free account at opensubtitles.com, then get an API key under your profile → API consumers. The username and password are optional: without them the key's own daily allowance is used, and with them your account's. Each run tells you how many downloads are left today. Languages are two-letter codes, separated by commas.</p>
+  <h2 style="margin-top:18px">YouTube login (for age-restricted trailers)</h2>
+  <div class="row">
+    <div><label for="ytLogin">Use the login from</label>
+      <select id="ytLogin">
+        <option value="">Off</option>
+        <option value="firefox">Firefox</option>
+        <option value="chrome">Chrome</option>
+        <option value="edge">Microsoft Edge</option>
+        <option value="brave">Brave</option>
+        <option value="opera">Opera</option>
+        <option value="vivaldi">Vivaldi</option>
+        <option value="file">A cookies.txt file</option>
+      </select></div>
+    <div id="ytFileBox" hidden><label for="ytFile">cookies.txt file</label><input id="ytFile" placeholder="C:\Users\you\Downloads\youtube_cookies.txt" spellcheck="false" style="width:340px"></div>
+    <button class="ghost" id="ytTest">Test</button>
+  </div>
+  <p class="note">Some trailers are age-restricted, and YouTube only shows them to signed-in users. The app tries every trailer without your login first and only uses it for those. Be signed in to youtube.com in the browser you choose. <strong>Firefox</strong> works directly. Chrome and Edge usually lock their logins on Windows; with those, install a “cookies.txt” export extension (for example “Get cookies.txt LOCALLY”), export while on youtube.com, and choose “A cookies.txt file”. Your login never leaves this computer.</p>
+  <p id="ytMsg" class="note" role="status"></p>
+  <h2 style="margin-top:18px">Artwork (fanart.tv, optional)</h2>
+  <div class="row">
+    <div><label for="fanKey">fanart.tv API key</label><input id="fanKey" type="password" autocomplete="off" spellcheck="false" style="width:320px"></div>
+  </div>
+  <p class="note">Posters, backdrops and logos come from TMDB and need nothing more. A free fanart.tv key adds banners, clear art, disc art and landscape thumbnails, and more choices for the rest. Create an account at fanart.tv, then get a personal API key from your profile.</p>
+  <div class="row"><button id="saveSet">Save settings</button></div>
+  <p id="setMsg" class="note">Your keys and password are stored only in config.json on this computer.</p>
+</section>
+
+<div class="bar">
+  <input id="folder" placeholder="Movie folder, for example D:\Movies" aria-label="Movie folder" spellcheck="false">
+  <button id="scan">Scan folder</button>
+</div>
+<div class="prog" id="prog" hidden>
+  <div class="ptext"><span><span id="pLabel" role="status"></span> <span id="pDetail"></span></span><span class="right"><span id="pCount"></span><button class="ghost small" id="pCancel" hidden>Cancel</button></span></div>
+  <div class="pbar" id="pBar" role="progressbar" aria-labelledby="pLabel" aria-valuemin="0" aria-valuemax="100"><span id="pFill"></span></div>
+</div>
+<section id="summary" hidden>
+  <p id="counts"></p>
+  <div class="meter" role="img" aria-label="Share of movies named for Jellyfin"><span class="r" id="mr"></span><span class="t" id="mt"></span></div>
+</section>
+<div class="actions" id="actions" hidden>
+  <button id="matchAll">Match all on TMDB</button>
+  <button class="ghost" id="renameBtn">Preview renames…</button>
+  <button class="ghost" id="nfoBtn">Write .nfo files…</button>
+  <button class="ghost" id="artBtn">Download artwork…</button>
+  <button class="ghost" id="trBtn">Download trailers…</button>
+  <button class="ghost" id="subBtn">Download subtitles…</button>
+</div>
+<div class="tools" id="tools" hidden>
+  <input id="filter" placeholder="Filter by title, year or file name" aria-label="Filter movies">
+  <select id="show" aria-label="Show which">
+    <option value="all">All movies</option>
+    <option value="todo">Needs renaming</option>
+    <option value="ready">Named for Jellyfin</option>
+    <option value="matched">Matched on TMDB</option>
+    <option value="review">Needs review</option>
+    <option value="unmatched">Not matched</option>
+    <option value="no-nfo">Missing .nfo</option>
+    <option value="no-art">Missing artwork</option>
+    <option value="no-trailer">Missing trailer</option>
+    <option value="no-subs">Missing subtitles</option>
+    <option value="dups">More than one copy</option>
+  </select>
+</div>
+<div class="wrap">
+  <div id="msg" class="msg">Enter the folder that holds your movies, then choose Scan folder. Next time, your library opens automatically.</div>
+  <table id="tbl" hidden><thead></thead><tbody></tbody></table>
+</div>
+</main>
+
+<dialog id="matchDlg" aria-labelledby="mTitle"><div class="dlg">
+  <div class="head">
+    <h2 id="mTitle">Find on TMDB</h2>
+    <div class="note" id="mFile"></div>
+    <form class="bar" id="mForm" style="margin-top:10px">
+      <input id="mQ" style="flex:1;min-width:200px" aria-label="Title">
+      <input id="mY" style="width:90px" aria-label="Year" placeholder="Year" inputmode="numeric">
+      <button>Search</button>
+    </form>
+  </div>
+  <div class="body"><ul class="results" id="mRes"></ul><div class="note" id="mMsg"></div></div>
+  <div class="foot">
+    <span class="grow" id="mCur"></span>
+    <button class="ghost" id="mClear">Clear match</button>
+    <button class="ghost" id="mAccept">Accept this guess</button>
+    <button class="ghost" id="mClose">Close</button>
+  </div>
+</div></dialog>
+
+<dialog id="renDlg" aria-labelledby="rTitle"><div class="dlg">
+  <div class="head"><h2 id="rTitle">Rename for Jellyfin</h2><div class="note" id="rSum">Working out the changes…</div></div>
+  <div class="body" id="rBody"></div>
+  <div class="foot">
+    <label class="grow"><input type="checkbox" id="rAll" checked> Select all</label>
+    <button class="ghost" id="rUndo">Undo last rename</button>
+    <button class="ghost" id="rClose">Close</button>
+    <button id="rGo">Rename selected</button>
+  </div>
+</div></dialog>
+
+<dialog id="nfoDlg" aria-labelledby="nTitle"><div class="dlg">
+  <div class="head"><h2 id="nTitle">Write .nfo files</h2></div>
+  <div class="body">
+    <p class="note" style="margin-top:0" id="nIntro">Writes a Kodi/Jellyfin <code>.nfo</code> next to each matched movie, with title, plot, cast, genres and TMDB/IMDb IDs. Movies that still need review are left out. Rename first so the files get the right names.</p>
+    <div class="opts">
+      <label id="nArtRow"><input type="checkbox" id="nArt" checked> Download poster and fanart images</label>
+      <label><input type="checkbox" id="nOver"> Update existing .nfo files and images with fresh TMDB data</label>
+      <p class="note" style="margin:-2px 0 8px 26px">Updating keeps everything else in them, such as watched status, play counts, tags and ratings from tinyMediaManager, and your own edits.</p>
+    </div>
+  </div>
+  <div class="foot"><button class="ghost" id="nClose">Close</button><button id="nGo">Write files</button></div>
+</div></dialog>
+
+<dialog id="artDlg" aria-labelledby="aTitle"><div class="dlg">
+  <div class="head"><h2 id="aTitle">Download artwork</h2></div>
+  <div class="body">
+    <p class="note" style="margin-top:0" id="aIntro">Fills in missing artwork for every matched movie, with the names Jellyfin looks for (<code>poster.jpg</code>, <code>fanart.jpg</code>, <code>clearlogo.png</code>, <code>landscape.jpg</code>, <code>banner.jpg</code>, <code>clearart.png</code>, <code>disc.png</code>; or <code>Movie (Year)-clearlogo.png</code> and so on when a movie shares its folder). Artwork you already have is recognised and kept. To pick a different image for one movie, open it and use its Artwork section.</p>
+    <div class="opts" id="aKinds" style="display:grid;grid-template-columns:1fr 1fr;gap:2px 16px"></div>
+    <p class="note" id="aFanNote">Banners, clear art and disc art come from fanart.tv: add a free key in Settings to get them.</p>
+    <div class="opts"><label><input type="checkbox" id="aReplace"> Replace existing artwork with the best available (old files go to the Recycle Bin)</label></div>
+  </div>
+  <div class="foot"><button class="ghost" id="aClose">Close</button><button id="aGo">Download artwork</button></div>
+</div></dialog>
+
+<dialog id="pickDlg" class="wide" aria-labelledby="pTitle"><div class="dlg">
+  <div class="head"><h2 id="pTitle">Choose</h2><div class="note" id="pNote">The image you pick replaces the current one, which goes to the Recycle Bin.</div></div>
+  <div class="body"><div class="picks" id="pList"></div><p class="note" id="pMsg"></p></div>
+  <div class="foot"><button class="ghost" id="pClose">Close</button></div>
+</div></dialog>
+
+<dialog id="vDlg" class="wide" aria-labelledby="vName"><div class="dlg">
+  <div class="hero" id="vHero"><img id="vPoster" alt=""><div><h2 id="vName">Loading…</h2><div class="note" id="vMeta"></div><div class="tagline" id="vTag"></div></div></div>
+  <div class="body" id="vView"></div>
+  <form class="body form" id="vEdit" hidden>
+    <label class="full">Title<input id="eTitle" required></label>
+    <label>Original title<input id="eOriginal"></label>
+    <label>Sort title<input id="eSort" placeholder="e.g. Godfather, The"></label>
+    <label>Year<input id="eYear" inputmode="numeric" maxlength="4"></label>
+    <label>Age rating<input id="eMpaa" placeholder="e.g. R or PG-13"></label>
+    <label class="full">Tagline<input id="eTagline"></label>
+    <label class="full">Plot<textarea id="ePlot"></textarea></label>
+    <label>Genres (separated by commas)<input id="eGenres"></label>
+    <label>Collection<input id="eSet" placeholder="e.g. Alien Collection"></label>
+    <p class="note full" style="margin:0">Saved straight into the movie's .nfo, keeping everything else in it. Jellyfin is told not to overwrite your edits, and the app keeps them when it updates .nfo files. A new title or year also becomes the name the renamer uses.</p>
+  </form>
+  <div class="foot">
+    <span class="grow" id="vMsg" role="status"></span>
+    <span id="vViewBtns"><button class="ghost" id="vOpen">Open folder</button> <button class="ghost" id="vMatch">Change match…</button> <button class="ghost" id="vDel">Delete…</button> <button class="ghost" id="vClose">Close</button> <button id="vEditBtn">Edit</button></span>
+    <span id="vEditBtns" hidden><button class="ghost" id="vReset">Reset to TMDB</button> <button class="ghost" id="vCancel">Cancel</button> <button id="vSave">Save</button></span>
+  </div>
+</div></dialog>
+
+<dialog id="shDlg" class="wide" aria-labelledby="shName"><div class="dlg">
+  <div class="hero" id="shHero"><img id="shPoster" alt=""><div><h2 id="shName">Loading…</h2><div class="note" id="shMeta"></div></div></div>
+  <div class="body" id="shView"></div>
+  <form class="body form" id="shEdit" hidden>
+    <label class="full">Title<input id="stTitle" required></label>
+    <label>Original title<input id="stOriginal"></label>
+    <label>Sort title<input id="stSort"></label>
+    <label>Year (first aired)<input id="stYear" inputmode="numeric" maxlength="4"></label>
+    <label>Age rating<input id="stMpaa" placeholder="e.g. TV-MA"></label>
+    <label class="full">Plot<textarea id="stPlot"></textarea></label>
+    <label class="full">Genres (separated by commas)<input id="stGenres"></label>
+    <p class="note full" style="margin:0">Saved into tvshow.nfo, keeping everything else in it, and locked so Jellyfin keeps your edits. A new title or year also becomes the show folder's name for the renamer.</p>
+  </form>
+  <div class="foot">
+    <span class="grow" id="shMsg" role="status"></span>
+    <span id="shViewBtns"><button class="ghost" id="shRefresh" title="Fetch the episode list from TMDB again">Refresh episodes</button> <button class="ghost" id="shOpen">Open folder</button> <button class="ghost" id="shMatch">Change match…</button> <button class="ghost" id="shDel">Delete show…</button> <button class="ghost" id="shClose">Close</button> <button id="shEditBtn">Edit</button></span>
+    <span id="shEditBtns" hidden><button class="ghost" id="shReset">Reset to TMDB</button> <button class="ghost" id="shCancel">Cancel</button> <button id="shSave">Save</button></span>
+  </div>
+</div></dialog>
+
+<dialog id="delDlg" aria-labelledby="dTitle"><div class="dlg">
+  <div class="head"><h2 id="dTitle">Delete</h2><div class="note" id="dWhere"></div></div>
+  <div class="body" id="dBody"></div>
+  <div class="foot"><span class="grow" id="dMsg"></span><button class="ghost" id="dClose">Cancel</button><button class="danger" id="dGo">Move to Recycle Bin</button></div>
+</div></dialog>
+
+<dialog id="subDlg" aria-labelledby="sTitle"><div class="dlg">
+  <div class="head"><h2 id="sTitle">Download subtitles</h2></div>
+  <div class="body">
+    <p class="note" style="margin-top:0">Checks your folder for changes, then searches OpenSubtitles.com for each matched movie or episode. Subtitles made for your exact copy of the file are picked first, so they're in sync. They're saved the way Jellyfin expects, for example <code>Heat (1995).en.srt</code>, or <code>Heat (1995).en.sdh.srt</code> for hearing-impaired versions.</p>
+    <div class="opts">
+      <label for="sLangs" style="display:block;margin-bottom:4px">Languages (two-letter codes, separated by commas)</label>
+      <input id="sLangs" placeholder="en, es" spellcheck="false" style="width:220px;margin-bottom:12px">
+      <label for="sHear" style="display:block;margin-bottom:4px">Type</label>
+      <select id="sHear" style="margin-bottom:12px"><option value="normal">Prefer regular subtitles</option><option value="prefer">Prefer SDH (with sound descriptions for the hearing impaired)</option></select>
+      <label><input type="checkbox" id="sEmb" checked> Skip files whose video already has subtitles in that language built in</label>
+    </div>
+    <p class="note">Movies that already have a subtitle file in a language are skipped for that language. OpenSubtitles limits downloads per day (about 20 on a free account); when the limit is reached the app stops and tells you when it resets.</p>
+  </div>
+  <div class="foot"><button class="ghost" id="sClose">Close</button><button id="sGo">Download subtitles</button></div>
+</div></dialog>
+
+<dialog id="trDlg" aria-labelledby="tTitle"><div class="dlg">
+  <div class="head"><h2 id="tTitle">Download trailers</h2></div>
+  <div class="body">
+    <p class="note" style="margin-top:0">First checks your folder for changes, then for each matched movie (or TV show):</p>
+    <ul class="note" style="margin:0 0 12px;padding-left:20px">
+      <li>keeps a trailer it already has, renaming or moving it to the right Jellyfin name if the movie was renamed;</li>
+      <li>replaces a trailer that belongs to a different movie (for example after you changed the match), sending the old one to the Recycle Bin;</li>
+      <li>downloads the official trailer from YouTube when there is none.</li>
+    </ul>
+    <p class="note">Trailers go in a <code>trailers</code> folder inside the movie's (or show's) folder, or as <code>Movie (Year)-trailer.mkv</code> next to the movie when it shares a folder.</p>
+    <div class="opts">
+      <label for="tQ" style="display:block;margin-bottom:4px">Quality</label>
+      <select id="tQ" style="margin-bottom:10px"><option value="1080">1080p (about 40–80 MB each)</option><option value="720">720p (about 20–40 MB each)</option><option value="480">480p (about 10–20 MB each)</option></select>
+    </div>
+    <label><input type="checkbox" id="tForce"> Re-download every trailer, even ones that look right</label>
+    <p class="note">Downloads run one at a time, so a large library can take a while. You can cancel from the progress bar, and anything already downloaded is kept.</p>
+  </div>
+  <div class="foot"><button class="ghost" id="tClose">Close</button><button id="tGo">Download trailers</button></div>
+</div></dialog>
+
+<script>
+const $=s=>document.querySelector(s);
+const MOVIE_COLS=[["del",""],["match","Movie"],["has","Has"],["named","Jellyfin"],["video","Video"],["size","Size","num"],["path","File"]];
+const TV_COLS=[["del",""],["match","Show"],["eps","Episodes"],["has","Has"],["named","Jellyfin"],["size","Size","num"],["folder","Folder"]];
+const MOVIE_FILTERS=[["all","All movies"],["todo","Needs renaming"],["ready","Named for Jellyfin"],["matched","Matched on TMDB"],["review","Needs review"],["unmatched","Not matched"],["no-nfo","Missing .nfo"],["no-art","Missing artwork"],["no-trailer","Missing trailer"],["no-subs","Missing subtitles"],["dups","More than one copy"]];
+const TV_FILTERS=[["all","All shows"],["missing","Missing episodes"],["todo","Needs renaming"],["ready","Named for Jellyfin"],["matched","Matched on TMDB"],["review","Needs review"],["unmatched","Not matched"],["no-nfo","Missing .nfo files"],["no-art","Missing artwork"],["no-trailer","Missing trailer"],["no-subs","Missing subtitles"]];
+const ART_KINDS={movies:[["poster","Poster"],["fanart","Backdrop"],["logo","Logo"],["landscape","Thumbnail"],["banner","Banner"],["clearart","Clear art"],["disc","Disc art"]],
+  tv:[["poster","Poster"],["fanart","Backdrop"],["logo","Logo"],["landscape","Thumbnail"],["banner","Banner"],["clearart","Clear art"],["season","Season posters"],["thumb","Episode thumbnails"]]};
+let mode=localStorage.getItem("mm-mode")==="tv"?"tv":"movies";
+let COLS=mode==="tv"?TV_COLS:MOVIE_COLS;
+let rows=[],key="match",dir=1,current=null;
+const ep=p=>mode==="tv"?p.replace(/^\/api\//,"/api/tv/"):p;   // the TV version of an endpoint
+const noun=n=>plural(n,mode==="tv"?"show":"movie");
+function applyResult(d){if(mode==="tv")setShows(d.shows||[]);else setRows(d.items||[])}
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const size=b=>b>=1e9?(b/1e9).toFixed(1)+" GB":b>=1e6?Math.round(b/1e6)+" MB":Math.max(1,Math.round(b/1e3))+" KB";
+const ok=m=>m&&(m.status==="auto"||m.status==="manual");
+const plural=(n,w)=>`${n} ${w}${n===1?"":"s"}`;
+
+async function api(url,data,method){
+  const opt=data===undefined&&!method?{}:{method:method||"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data||{})};
+  const r=await fetch(url,opt);let d={};
+  try{d=await r.json()}catch{}
+  if(!r.ok)throw new Error(d.error||`Request failed (${r.status})`);
+  return d;
+}
+function busy(btn,text){const old=btn.textContent;btn.disabled=true;btn.textContent=text;return()=>{btn.disabled=false;btn.textContent=old}}
+/* ---------- progress ---------- */
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const JOB_BUTTONS=["#scan","#matchAll","#renameBtn","#nfoBtn","#artBtn","#trBtn","#subBtn"];
+let jobId=null;
+function prog(cls){const p=$("#prog");p.hidden=false;p.className="prog"+(cls?" "+cls:"")}
+function status(t,err){  // a message with no bar
+  prog(err?"fail":"");$("#pDetail").textContent="";$("#pBar").hidden=true;$("#pLabel").textContent=t;$("#pCount").textContent="";
+}
+function showJob(j){
+  prog("");const bar=$("#pBar");bar.hidden=false;
+  $("#pLabel").textContent=j.label+"…";$("#pDetail").textContent=j.detail?"· "+j.detail:"";
+  if(j.total>0){
+    const pct=Math.min(100,Math.round(j.done/j.total*100));
+    bar.classList.remove("indet");$("#pFill").style.width=pct+"%";bar.setAttribute("aria-valuenow",pct);
+    $("#pCount").textContent=`${j.done.toLocaleString()} of ${j.total.toLocaleString()} · ${pct}%`;
+  }else{
+    bar.classList.add("indet");bar.removeAttribute("aria-valuenow");$("#pCount").textContent=`${Math.round(j.elapsed||0)} s`;
+  }
+}
+function finish(msg,err,count){
+  prog(err?"fail":"done");const bar=$("#pBar");bar.hidden=false;bar.classList.remove("indet");
+  $("#pFill").style.width="100%";bar.setAttribute("aria-valuenow",100);
+  $("#pDetail").textContent="";$("#pLabel").textContent=(err?"":"✓ ")+msg;if(count!==undefined)$("#pCount").textContent=count;
+}
+/* Start a background task, show its progress, and return its result when it finishes */
+async function runJob(url,data,startLabel,cancellable){
+  JOB_BUTTONS.forEach(s=>$(s).disabled=true);$("#pCancel").hidden=!cancellable;$("#pCancel").disabled=false;
+  showJob({label:startLabel,done:0,total:0,elapsed:0});
+  try{
+    const {job}=await api(url,data);jobId=job;
+    for(;;){
+      const j=await api(`/api/job/${job}`);
+      showJob(j);
+      if(j.finished){if(j.error)throw new Error(j.error);
+        $("#pCount").textContent=j.total?`${j.total.toLocaleString()} of ${j.total.toLocaleString()} · ${j.elapsed} s`:`${j.elapsed} s`;
+        return j.result}
+      await sleep(300);
+    }
+  }finally{JOB_BUTTONS.forEach(s=>$(s).disabled=false);$("#pCancel").hidden=true;jobId=null}
+}
+
+/* ---------- table ---------- */
+function head(){
+  $("#tbl thead").innerHTML="<tr>"+COLS.map(([k,l,c])=>k==="del"?`<th style="width:1%"><span class="sr" style="position:absolute;left:-9999px">Delete</span></th>`:
+    `<th tabindex="0" data-k="${k}" class="${c||""}"${k===key?` aria-sort="${dir>0?"ascending":"descending"}"`:""}>${l}${k===key?(dir>0?" ▲":" ▼"):""}</th>`).join("")+"</tr>";
+}
+function matchCell(r){
+  const m=r.match,img=m&&m.poster?`<img src="${esc(m.poster)}" alt="" loading="lazy">`:`<span class="ph"></span>`;
+  let line2;
+  if(!m)line2=`<span class="tag n t2">Not matched</span>`;
+  else if(m.status==="none")line2=`<span class="tag t t2">No result – search</span>`;
+  else if(m.status==="review")line2=`<span class="tag t t2">Needs review</span>`;
+  else line2=`<span class="tag r t2">${m.status==="manual"?"Confirmed":"Matched"}</span>`;
+  const label=m&&m.name?esc(m.name):`${esc(r.title)}${r.year?` (${r.year})`:""}`;
+  return `<button class="mbtn" data-id="${esc(r.id)}" title="Details">${img}<span><span class="t1">${label}</span>${line2}</span></button>`;
+}
+const hasCount=r=>{const f=r.files||{};return(f.nfo?1:0)+(f.art?1:0)+(f.trailer?1:0)+((f.subs||[]).length?1:0)};
+const videoText=r=>[r.resolution,r.codec,r.source].filter(Boolean).join(" · ");
+const sortVal=(r,k)=>k==="match"?(r.match&&r.match.name)||`${r.title} (${r.year||""})`:k==="video"?parseInt(r.resolution)||0:k==="has"?hasCount(r):k==="named"?(r.named?1:0):r[k];
+let copies={};
+function countCopies(){copies={};rows.forEach(r=>{const id=ok(r.match)&&!r.part?r.match.tmdb_id:null;if(id)copies[id]=(copies[id]||0)+1})}
+function hasCell(r){
+  const f=r.files||{},subs=f.subs||[];
+  const b=(on,label,tip)=>`<span class="${on?"y":""}" title="${tip}${on?"":" missing"}">${label}</span>`;
+  const shown=subs.length>3?subs.slice(0,3).join(" ")+` +${subs.length-3}`:subs.join(" ");
+  return `<span class="has">${b(f.nfo,"NFO",".nfo file")}${b(f.art,"ART","Poster")}${b(f.trailer,"TRL","Trailer")}${b(subs.length,subs.length?esc(shown).toUpperCase():"SUB",subs.length?"Subtitles: "+esc(subs.join(", ")):"Subtitles")}</span>`;
+}
+function visible(r,show){
+  switch(show){
+    case"todo":return!r.named;case"ready":return r.named;
+    case"no-nfo":return!(r.files||{}).nfo;case"no-art":return!(r.files||{}).art;
+    case"no-trailer":return!(r.files||{}).trailer;case"no-subs":return!((r.files||{}).subs||[]).length;
+    case"dups":return ok(r.match)&&!r.part&&copies[r.match.tmdb_id]>1;
+    case"matched":return ok(r.match);case"review":return r.match&&r.match.status==="review";
+    case"unmatched":return!r.match||r.match.status==="none";default:return true}
+}
+function render(){
+  if(mode==="tv")return renderTv();
+  const q=$("#filter").value.trim().toLowerCase(),show=$("#show").value;
+  const list=rows
+    .filter(r=>visible(r,show)&&(!q||`${r.title} ${r.year||""} ${r.path} ${r.match?.name||""}`.toLowerCase().includes(q)))
+    .sort((a,b)=>{const x=sortVal(a,key)??"",y=sortVal(b,key)??"";
+      return dir*(typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y),undefined,{numeric:true}))});
+  head();
+  $("#tbl tbody").innerHTML=list.map(r=>`<tr><td><button class="delbtn" data-del="${esc(r.id)}" aria-label="Delete ${esc(r.title)}" title="Delete…">${TRASH}</button></td><td>${matchCell(r)}</td><td>${hasCell(r)}</td><td><span class="tag ${r.named?"r":"t"}">${r.named?"Named":"Needs renaming"}</span></td><td>${esc(videoText(r))}</td><td class="num">${size(r.size)}</td><td class="file" title="${esc(r.path)}"><div>${esc(r.path)}</div></td></tr>`).join("");
+  $("#tbl").hidden=!list.length;
+  $("#msg").hidden=!!list.length;
+  if(!list.length)$("#msg").textContent=rows.length?"No movies match this filter.":"No video files found in this folder.";
+}
+function summary(sec){
+  if(mode==="tv")return summaryTv();
+  const n=rows.length,good=rows.filter(r=>r.named).length,todo=n-good;countCopies();
+  const dups=Object.values(copies).filter(c=>c>1).length;
+  const matched=rows.filter(r=>ok(r.match)).length,review=rows.filter(r=>r.match&&r.match.status==="review").length;
+  $("#counts").innerHTML=`<strong>${n}</strong> movies found. <strong>${good}</strong> named for Jellyfin; <strong>${todo}</strong> need renaming. TMDB: <strong>${matched}</strong> matched, <strong>${review}</strong> need review.`+(dups?` <strong>${dups}</strong> ${dups===1?"movie has":"movies have"} more than one copy.`:"");
+  $("#mr").style.width=n?good/n*100+"%":"0";
+  $("#mt").style.width=n?todo/n*100+"%":"0";
+  $("#summary").hidden=$("#tools").hidden=$("#actions").hidden=false;
+}
+function setRows(items,sec){rows=items;summary(sec);render()}
+
+function changeText(c){
+  if(!c)return"";if(!c.added&&!c.removed)return" No changes since last time.";
+  return" "+[c.added&&`${c.added} new`,c.removed&&`${c.removed} gone`].filter(Boolean).join(", ")+" since last time.";
+}
+async function scanFolder(refresh){
+  try{const d=await runJob(ep("/api/scan"),{folder:$("#folder").value,refresh},refresh?"Checking for changes":"Finding video files");applyResult(d);
+    const n=mode==="tv"?d.shows.length:d.items.length;
+    finish((refresh?`Library loaded: ${noun(n)}.`:`Scan complete: ${noun(n)} found.`)+changeText(d.changes))}
+  catch(e){finish(e.message,true);if(!rows.length){$("#tbl").hidden=true;$("#msg").hidden=false;$("#msg").textContent="Nothing scanned yet."}}
+}
+$("#scan").onclick=()=>scanFolder(false);
+/* On open: show the last library straight away, then check its folder for new, changed or removed files */
+async function loadLibrary(){
+  try{
+    const lib=await api(ep("/api/library"));
+    if(!lib.folder)return;
+    $("#folder").value=lib.folder;
+    if(lib.missing){status(`Couldn't find ${lib.folder}. Connect the drive, or enter another folder and choose Scan folder.`,true);return}
+    const have=mode==="tv"?lib.shows:lib.items;
+    if(have){applyResult(lib);await scanFolder(true)}
+    else await scanFolder(false);
+  }catch(e){status(e.message,true)}
+}
+$("#folder").onkeydown=e=>{if(e.key==="Enter")$("#scan").click()};
+$("#filter").oninput=$("#show").onchange=render;
+$("#tbl").onclick=e=>{
+  const mb=e.target.closest(".mbtn");if(mb)return mode==="tv"?openShow(mb.dataset.id):openDetail(mb.dataset.id);
+  const db=e.target.closest(".delbtn");if(db)return mode==="tv"?tvDelete(db.dataset.del,"show"):openDelete(db.dataset.del);
+  const th=e.target.closest("th");if(!th||!th.dataset.k)return;const k=th.dataset.k;dir=k===key?-dir:1;key=k;render();$(`#tbl th[data-k="${k}"]`)?.focus()};
+$("#tbl").onkeydown=e=>{if(e.key==="Enter"&&e.target.matches("th"))e.target.click()};
+
+/* ---------- settings ---------- */
+function showSettings(c){
+  $("#key").value="";
+  $("#key").placeholder=c.has_key?`Saved (ends in ${c.key_hint}). Paste a new key to replace it.`:"Paste your TMDB API key";
+  $("#lang").value=c.language||"en-US";
+  $("#osKey").value="";$("#osPass").value="";
+  $("#osKey").placeholder=c.has_os_key?`Saved (ends in ${c.os_key_hint})`:"Paste your API key";
+  $("#osUser").value=c.os_user||"";
+  $("#osPass").placeholder=c.has_os_pass?"Saved":"";
+  $("#ytLogin").value=c.yt_login||"";$("#ytFile").value=c.yt_cookie_file||"";$("#ytFileBox").hidden=$("#ytLogin").value!=="file";
+  $("#fanKey").value="";$("#fanKey").placeholder=c.has_fanart_key?`Saved (ends in ${c.fanart_key_hint})`:"Optional";
+  $("#subLangs").value=c.sub_langs||"en";$("#sLangs").value=c.sub_langs||"en";$("#sHear").value=c.sub_hearing||"normal";
+}
+$("#setBtn").onclick=()=>{const p=$("#settings");p.hidden=!p.hidden;$("#setBtn").setAttribute("aria-expanded",!p.hidden);if(!p.hidden)$("#key").focus()};
+$("#saveSet").onclick=async()=>{
+  const done=busy($("#saveSet"),"Checking…");
+  try{const d=await api("/api/settings",{tmdb_key:$("#key").value,language:$("#lang").value,
+      os_key:$("#osKey").value,os_user:$("#osUser").value,os_pass:$("#osPass").value,sub_langs:$("#subLangs").value,
+      yt_login:$("#ytLogin").value,yt_cookie_file:$("#ytFile").value,fanart_key:$("#fanKey").value});showSettings(d);
+    const notes=[d.verified&&"TMDB accepted the key.",d.os_info,d.fanart_info,"Settings saved."].filter(Boolean).join(" ");
+    $("#setMsg").innerHTML=`<span class="tag r">${esc(notes)}</span>`}
+  catch(e){$("#setMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}
+  done();
+};
+
+/* ---------- matching ---------- */
+$("#matchAll").onclick=async()=>{
+  try{const d=await runJob(ep("/api/match-all"),{},"Matching on TMDB",true);applyResult(d);
+    if(!d.checked)finish(`Every ${mode==="tv"?"show":"movie"} already has a match. Click a match to change it.`);
+    else finish(`Matching complete: ${d.counts.auto} matched${d.counts.nfo?` (${d.counts.nfo} from their .nfo files)`:""}, ${d.counts.review} need review, ${d.counts.none} not found.`+(d.errors?` ${d.errors} failed: ${d.error}`:""),!!d.errors);
+    if(d.counts&&d.counts.review)$("#show").value="review",render();
+  }catch(e){finish(e.message,true);if(/key/i.test(e.message)&&$("#settings").hidden)$("#setBtn").click()}
+};
+
+function openMatch(id){
+  current=rows.find(r=>r.id===id);if(!current)return;
+  $("#mFile").textContent=mode==="tv"?current.folder:current.path;
+  $("#mQ").value=current.match&&current.match.title||current.title;
+  $("#mY").value=current.match&&current.match.year||current.year||"";
+  const m=current.match;
+  $("#mCur").textContent=m&&m.name?`Current: ${m.name}`:"";
+  $("#mAccept").hidden=!(m&&m.status==="review");
+  $("#mClear").hidden=!m;
+  $("#mRes").innerHTML="";$("#mMsg").textContent="";
+  $("#matchDlg").showModal();
+  doSearch();
+}
+async function doSearch(){
+  $("#mMsg").textContent="Searching…";$("#mRes").innerHTML="";
+  try{
+    const d=await api(`${ep("/api/search")}?q=${encodeURIComponent($("#mQ").value)}&year=${encodeURIComponent($("#mY").value)}`);
+    const curId=current.match&&current.match.tmdb_id;
+    $("#mMsg").textContent=d.results.length?"":"No results. Try a shorter title or remove the year.";
+    $("#mRes").innerHTML=d.results.map(r=>`<li>${r.poster?`<img src="${esc(r.poster)}" alt="" loading="lazy">`:`<span class="ph"></span>`}
+      <div class="info"><strong>${esc(r.title)}</strong> ${r.year?`(${r.year})`:""}${r.original_title&&r.original_title!==r.title?` <span class="note">· ${esc(r.original_title)}</span>`:""}
+      <p>${esc(r.overview)||"No overview."}</p>
+      ${r.tmdb_id===curId?`<span class="cur">Current match</span> `:""}<button data-pick="${r.tmdb_id}">Use this</button>
+      <a class="note" href="https://www.themoviedb.org/${mode==="tv"?"tv":"movie"}/${r.tmdb_id}" target="_blank" rel="noopener">TMDB page</a></div></li>`).join("");
+  }catch(e){$("#mMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}
+}
+async function saveMatch(data){
+  try{
+    if(mode==="tv"){const d=await api("/api/tv/match",{key:current.id,...data});setShows(d.shows);$("#matchDlg").close();if($("#shDlg").open)openShow(current.id);return}
+    const d=await api("/api/match",{id:current.id,...data});
+    const i=rows.findIndex(r=>r.id===current.id);if(i>=0&&d.item)rows[i]=d.item;
+    summary();render();$("#matchDlg").close();if($("#vDlg").open)openDetail(current.id);
+  }catch(e){$("#mMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}
+}
+$("#mForm").onsubmit=e=>{e.preventDefault();doSearch()};
+$("#mRes").onclick=e=>{const b=e.target.closest("[data-pick]");if(b){b.disabled=true;saveMatch({tmdb_id:+b.dataset.pick})}};
+$("#mAccept").onclick=()=>saveMatch({accept:true});
+$("#mClear").onclick=()=>saveMatch({clear:true});
+$("#mClose").onclick=()=>$("#matchDlg").close();
+
+/* ---------- renaming ---------- */
+let plans=[];
+const leftAlone=p=>(p.left_alone||[]).length?`<div class="note" style="margin:4px 0 0 28px">Left alone: ${plural(p.left_alone.length,"file")} whose names don't fit TMDB's episode list (extras numbered as episodes, episodes numbered differently, or one file holding episodes that aren't next to each other): <span style="word-break:break-all">${p.left_alone.slice(0,4).map(esc).join("; ")}${p.left_alone.length>4?` and ${p.left_alone.length-4} more`:""}</span></div>`:"";
+async function loadPlan(){
+  $("#rBody").innerHTML="";$("#rSum").textContent="Working out the changes…";$("#rGo").disabled=true;
+  try{
+    const d=await api(ep("/api/rename/preview"));plans=d.plans;
+    const ready=plans.filter(p=>!p.reason).length,blocked=plans.length-ready;
+    const what=mode==="tv"?["episode","show"]:["file","file"];
+    $("#rSum").textContent=`${noun(ready)} to rename`+(blocked?`, ${blocked} blocked`:"")+
+      `. ${plural(d.already,mode==="tv"?"episode":"file")} already named correctly${mode==="tv"?" (kept as they are, whatever their episode titles say)":""}. `+(d.unmatched?`${plural(d.unmatched,what[1])} without a confirmed match ${d.unmatched===1?"is":"are"} left alone.`:"")+" Nothing changes until you choose Rename selected.";
+    $("#rBody").innerHTML=plans.length?plans.map((p,i)=>`<div class="plan"><label><input type="checkbox" data-i="${i}" ${p.reason?"disabled":"checked"}> ${esc(p.name)}</label>
+      <ul>${p.changes.map(c=>`<li>${c.kind==="folder"?"📁 ":c.kind==="bin"?"🗑 ":""}<span class="from">${esc(c.from)}</span><span class="arrow">→</span>${c.kind==="bin"?`<em>${esc(c.to)}</em>`:esc(c.to)}</li>`).join("")}</ul>
+      ${p.reason?`<div class="why">Skipped: ${esc(p.reason)}</div>`:""}${leftAlone(p)}</div>`).join("")+(d.left_only||[]).map(p=>`<div class="plan"><strong>${esc(p.name)}</strong>${leftAlone(p)}</div>`).join(""):
+      ((d.left_only||[]).length?(d.left_only||[]).map(p=>`<div class="plan"><strong>${esc(p.name)}</strong>${leftAlone(p)}</div>`).join(""):`<p class="note">Nothing to rename.</p>`);
+    $("#rUndo").hidden=!d.can_undo;$("#rAll").checked=true;
+    $("#rGo").disabled=!ready;
+  }catch(e){$("#rSum").innerHTML=`<span class="err">${esc(e.message)}</span>`}
+}
+$("#renameBtn").onclick=()=>{$("#renDlg").showModal();loadPlan()};
+$("#rAll").onchange=()=>document.querySelectorAll("#rBody input:not(:disabled)").forEach(c=>c.checked=$("#rAll").checked);
+$("#rGo").onclick=async()=>{
+  const ids=[...document.querySelectorAll("#rBody input:checked")].map(c=>plans[c.dataset.i].id);
+  if(!ids.length)return;
+  $("#renDlg").close();
+  try{const d=await runJob(ep("/api/rename/apply"),{ids},"Renaming");applyResult(d);
+    finish(`Rename complete: ${noun(d.renamed)} renamed.`+(d.failed.length?` ${d.failed.length} failed: ${d.failed.map(f=>`${f.name} (${f.error})`).join("; ")}`:" You can undo this from Preview renames."),!!d.failed.length);
+  }catch(e){finish(e.message,true)}
+};
+$("#rUndo").onclick=async()=>{
+  if(!confirm("Put the files from the last rename back where they were?"))return;
+  const done=busy($("#rUndo"),"Undoing…");
+  try{const d=await api(ep("/api/rename/undo"),{});applyResult(d);status(`Undid ${plural(d.undone,"change")}.`+(d.failed?` ${d.failed} couldn't be undone.`:""),!!d.failed);done();loadPlan()}
+  catch(e){$("#rSum").innerHTML=`<span class="err">${esc(e.message)}</span>`;done()}
+};
+$("#rClose").onclick=()=>$("#renDlg").close();
+
+/* ---------- nfo ---------- */
+$("#nfoBtn").onclick=()=>{
+  $("#nArtRow").hidden=mode==="tv";
+  $("#nIntro").innerHTML=mode==="tv"?"Writes Kodi/Jellyfin <code>.nfo</code> files for every matched show: <code>tvshow.nfo</code> in the show folder, <code>season.nfo</code> in each season folder, and one per episode file (with two entries for a two-episode file). Existing files are left alone unless you choose to update them.":
+    "Writes a Kodi/Jellyfin <code>.nfo</code> next to each matched movie, with title, plot, cast, genres and TMDB/IMDb IDs. Movies that still need review are left out. Rename first so the files get the right names.";
+  $("#nfoDlg").showModal()};
+$("#nClose").onclick=()=>$("#nfoDlg").close();
+$("#nGo").onclick=async()=>{
+  $("#nfoDlg").close();
+  try{const d=await runJob(ep("/api/nfo"),{artwork:$("#nArt").checked,overwrite:$("#nOver").checked},"Checking for changes",true);applyResult(d);
+    if(mode==="tv")finish(`.nfo files done: ${plural(d.episodes,"episode")}, ${plural(d.seasons,"season")} and ${plural(d.show_nfos,"show")} written, ${d.skipped} already there.`+
+      (d.kept?` ${d.kept} kept as they are because their titles don't match TMDB's (tinyMediaManager may have numbered those episodes differently).`:"")+
+      (d.unknown?` ${d.unknown} not on TMDB.`:"")+(d.failed.length?` ${d.failed.length} failed: ${d.failed.map(f=>`${f.name} (${f.error})`).join("; ")}`:""),!!d.failed.length);
+    else finish(`Done for ${plural(d.movies,"movie")}: ${plural(d.nfo,".nfo file")} and ${plural(d.images,"image")} written, ${d.skipped} already there.`+
+      (d.failed.length?` ${d.failed.length} failed: ${d.failed.map(f=>`${f.name} (${f.error})`).join("; ")}`:""),!!d.failed.length);
+  }catch(e){finish(e.message,true)}
+};
+
+/* ---------- one movie: details and edits ---------- */
+let detailId=null,detail=null;
+const fmtMin=m=>m?`${Math.floor(m/60)} h ${m%60} min`:"";
+function heroFrom(d){
+  const i=d.info||{},it=d.item,m=it.match||{};
+  $("#vName").textContent=(i.title||m.title||it.title)+((i.year||m.year||it.year)?` (${i.year||m.year||it.year})`:"");
+  const meta=[i.runtime&&fmtMin(+i.runtime),i.mpaa,(i.genres||[]).join(", ")].filter(Boolean);
+  $("#vMeta").textContent=meta.join(" · ");
+  $("#vTag").textContent=i.tagline||"";
+  $("#vPoster").src=d.images.poster||"";$("#vPoster").hidden=!d.images.poster;
+  $("#vHero").style.backgroundImage=d.images.fanart?`url("${d.images.fanart}")`:"none";
+}
+function viewFrom(d){
+  const i=d.info,e=d.edits||{},ed=k=>k in e?`<span class="edited" title="You edited this">✎ edited</span>`:"";
+  let h="";
+  if(!i){h+=`<p class="note">${d.item.match?"No details yet. Confirm the match, then Write .nfo files, or click Edit.":"Not matched on TMDB yet. Use Change match… to find it."}</p>`}
+  else{
+    h+=`<p>${esc(i.plot)||'<span class="note">No plot.</span>'}${ed("plot")}</p><dl class="facts">`;
+    const row=(k,v,key)=>v?`<dt>${k}</dt><dd>${v}${key?ed(key):""}</dd>`:"";
+    const r=i.ratings||{},rt=Object.entries(r).map(([k,v])=>`${esc(k.replace("themoviedb","TMDB").replace("imdb","IMDb"))} ${esc(v)}`).join(" · ");
+    h+=row("Original title",i.originaltitle&&i.originaltitle!==i.title?esc(i.originaltitle):"","originaltitle")
+      +row("Sort title",esc(i.sorttitle),"sorttitle")+row("Genres",esc((i.genres||[]).join(", ")),"genres")
+      +row("Released",esc(i.premiered))+row("Rating",rt)+row("Age rating",esc(i.mpaa),"mpaa")
+      +row("Director",esc((i.directors||[]).join(", ")))+row("Studio",esc((i.studios||[]).join(", ")))
+      +row("Collection",esc(i.set),"set")
+      +row("Links",[i.tmdb_id&&`<a href="https://www.themoviedb.org/movie/${i.tmdb_id}" target="_blank" rel="noopener">TMDB</a>`,i.imdb_id&&`<a href="https://www.imdb.com/title/${esc(i.imdb_id)}/" target="_blank" rel="noopener">IMDb</a>`].filter(Boolean).join(" · "))
+      +row("Watched",i.watched?"Yes":"");
+    h+=`</dl>`;
+    if((i.cast||[]).length)h+=`<h3 style="font-size:1rem;margin:10px 0 4px">Cast</h3><ul class="cast">${i.cast.map(a=>`<li>${a.thumb?`<img src="${esc(a.thumb)}" alt="" loading="lazy">`:`<span class="ph"></span>`}<span>${esc(a.name)}<small>${esc(a.role)}</small></span></li>`).join("")}</ul>`;
+    h+=`<p class="note">Details from ${d.source==="nfo"?`the .nfo file (${esc(d.nfo)})${i.by_tmm?", written by tinyMediaManager":""}`:"TMDB (there's no .nfo file yet)"}${i.locked?". Jellyfin won't overwrite them":""}.</p>`;
+  }
+  h+=`<h3 style="font-size:1rem;margin:14px 0 4px">Artwork</h3><div class="artgrid">${(d.artwork||[]).map(a=>`<div class="artcard">
+      <div class="pic">${a.url?`<img src="${esc(a.url)}" alt="${esc(a.label)}" loading="lazy">`:"missing"}</div>
+      <div class="row"><span title="${esc(a.file||"")}">${esc(a.label)}</span>${d.editable?`<button class="ghost small" data-art="${a.kind}" data-label="${esc(a.label)}">${a.url?"Change…":"Add…"}</button>`:""}</div></div>`).join("")}</div>`;
+  h+=`<h3 style="font-size:1rem;margin:14px 0 4px">Files in ${esc(d.folder||"the library folder")}</h3><ul class="files">${d.files.map(f=>`<li><span class="k">${f.kind}</span><span class="n">${esc(f.name)}</span><span class="s">${f.size?size(f.size):""}</span></li>`).join("")}</ul>`;
+  $("#vView").innerHTML=h;
+}
+function setEditMode(on){
+  $("#vView").hidden=on;$("#vEdit").hidden=!on;$("#vViewBtns").hidden=on;$("#vEditBtns").hidden=!on;$("#vMsg").textContent="";
+  if(on){const i=detail.info||{},m=detail.item.match||{},v=(k,f)=>k in detail.edits?detail.edits[k]:f;
+    $("#eTitle").value=v("title",i.title||m.title||"");$("#eOriginal").value=v("originaltitle",i.originaltitle||"");
+    $("#eSort").value=v("sorttitle",i.sorttitle||"");$("#eYear").value=v("year",i.year||m.year||"");
+    $("#eMpaa").value=v("mpaa",i.mpaa||"");$("#eTagline").value=v("tagline",i.tagline||"");
+    $("#ePlot").value=v("plot",i.plot||"");$("#eGenres").value=(v("genres",i.genres||[])).join(", ");$("#eSet").value=v("set",i.set||"");
+    $("#vReset").hidden=!Object.keys(detail.edits||{}).length;$("#eTitle").focus()}
+}
+async function openDetail(id){
+  detailId=id;current=rows.find(r=>r.id===id)||current;
+  if(!$("#vDlg").open)$("#vDlg").showModal();
+  setEditMode(false);$("#vName").textContent="Loading…";$("#vMeta").textContent=$("#vTag").textContent="";$("#vView").innerHTML="";$("#vPoster").hidden=true;$("#vHero").style.backgroundImage="none";
+  try{detail=await api(`/api/movie?id=${encodeURIComponent(id)}`);heroFrom(detail);viewFrom(detail);$("#vEditBtn").disabled=!detail.editable;
+    $("#vEditBtn").title=detail.editable?"":"Match and confirm this movie first"}
+  catch(e){$("#vView").innerHTML=`<p class="err">${esc(e.message)}</p>`}
+}
+async function saveDetail(reset){
+  const fields={title:$("#eTitle").value,originaltitle:$("#eOriginal").value,sorttitle:$("#eSort").value,year:$("#eYear").value,
+    mpaa:$("#eMpaa").value,tagline:$("#eTagline").value,plot:$("#ePlot").value,genres:$("#eGenres").value,set:$("#eSet").value};
+  if(reset&&!confirm("Forget your edits for this movie and go back to TMDB's details?"))return;
+  const done=busy(reset?$("#vReset"):$("#vSave"),"Saving…");
+  try{detail=await api("/api/movie/edit",{id:detailId,fields,reset});heroFrom(detail);viewFrom(detail);setEditMode(false);
+    const i=rows.findIndex(r=>r.id===detailId);if(i>=0){rows[i]=detail.item;summary();render()}
+    $("#vMsg").innerHTML=`<span class="tag r">${reset?"Back to TMDB's details.":"Saved to the .nfo."}</span>`}
+  catch(e){$("#vMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}
+  done();
+}
+$("#vClose").onclick=()=>$("#vDlg").close();
+$("#vEditBtn").onclick=()=>setEditMode(true);
+$("#vCancel").onclick=()=>setEditMode(false);
+$("#vSave").onclick=()=>saveDetail(false);
+$("#vReset").onclick=()=>saveDetail(true);
+$("#vEdit").onsubmit=e=>{e.preventDefault();saveDetail(false)};
+$("#vMatch").onclick=()=>openMatch(detailId);
+$("#vDel").onclick=()=>{$("#vDlg").close();openDelete(detailId)};
+$("#vOpen").onclick=async()=>{try{await api("/api/open-folder",{id:detailId});$("#vMsg").textContent="Opened in Explorer."}catch(e){$("#vMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}};
+
+/* ---------- artwork ---------- */
+$("#artBtn").onclick=async()=>{
+  $("#aKinds").innerHTML=ART_KINDS[mode].map(([k,l])=>`<label><input type="checkbox" name="akind" value="${k}" checked> ${l}</label>`).join("");
+  $("#aIntro").innerHTML=mode==="tv"?"Fills in missing artwork for every matched show with the names Jellyfin looks for: in the show folder <code>poster.jpg</code>, <code>fanart.jpg</code>, <code>clearlogo.png</code>, <code>landscape.jpg</code>, <code>banner.jpg</code>, <code>clearart.png</code>; season posters beside them (<code>season01-poster.jpg</code>, <code>season-specials-poster.jpg</code>); and a <code>-thumb.jpg</code> for each episode. Artwork you already have is kept.":
+    "Fills in missing artwork for every matched movie, with the names Jellyfin looks for (<code>poster.jpg</code>, <code>fanart.jpg</code>, <code>clearlogo.png</code>, <code>landscape.jpg</code>, <code>banner.jpg</code>, <code>clearart.png</code>, <code>disc.png</code>; or <code>Movie (Year)-clearlogo.png</code> and so on when a movie shares its folder). Artwork you already have is recognised and kept. To pick a different image for one movie, open it and use its Artwork section.";
+  try{const c=await api("/api/config");$("#aFanNote").hidden=c.has_fanart_key}catch{}
+  $("#artDlg").showModal();
+};
+$("#aClose").onclick=()=>$("#artDlg").close();
+$("#aGo").onclick=async()=>{
+  const kinds=[...document.querySelectorAll('input[name="akind"]:checked')].map(c=>c.value);
+  if(!kinds.length)return;
+  $("#artDlg").close();
+  try{const d=await runJob(ep("/api/artwork"),{kinds,replace:$("#aReplace").checked},"Checking for changes",true);applyResult(d);
+    const labels={poster:"poster",fanart:"backdrop",logo:"logo",landscape:"thumbnail",banner:"banner",clearart:"clear art",disc:"disc art",season:"season poster",thumb:"episode thumbnail"};
+    const by=Object.entries(d.by_kind).filter(([,n])=>n).map(([k,n])=>plural(n,labels[k])).join(", ");
+    finish(`${d.cancelled?"Stopped":"Artwork done"}: ${plural(d.downloaded,"image")} downloaded${by?` (${by})`:""}, ${d.had} already there, ${d.none} not available.`+
+      (d.numbering?` ${d.numbering} episode thumbnails skipped because TMDB numbers those episodes differently.`:"")+
+      (d.failed.length?` ${d.failed.length} failed: ${d.failed.map(f=>`${f.name} (${f.error})`).join("; ")}`:""),!!d.failed.length);
+  }catch(e){finish(e.message,true)}
+};
+let pickKind=null;
+$("#vView").addEventListener("click",e=>{const b=e.target.closest("[data-art]");if(b)openPicker(b.dataset.art,b.dataset.label)});
+function openPicker(kind,label){
+  return pickFrom(kind,label,`/api/artwork/options?id=${encodeURIComponent(detailId)}&kind=${kind}`,
+    async url=>{detail=await api("/api/artwork/set",{id:detailId,kind,url});heroFrom(detail);viewFrom(detail);
+      $("#vMsg").innerHTML=`<span class="tag r">${esc(label)} updated.</span>`;
+      const i=rows.findIndex(r=>r.id===detailId);if(i>=0){rows[i]=detail.item;render()}});
+}
+async function pickFrom(kind,label,optionsUrl,use){
+  pickKind=kind;$("#pTitle").textContent=`Choose a ${label.toLowerCase()}`;$("#pList").innerHTML="";$("#pMsg").textContent="Looking on TMDB and fanart.tv…";
+  $("#pickDlg").showModal();
+  try{const d=await api(optionsUrl);
+    $("#pMsg").textContent=d.options.length?"":(["banner","clearart","disc"].includes(kind)?"Nothing found. This kind comes from fanart.tv: add a free key in Settings, or fanart.tv has none for this one yet.":"Nothing found.");
+    $("#pList").innerHTML=d.options.slice(0,60).map((o,i)=>`<button data-i="${i}"><span class="pic"><img src="${esc(o.preview)}" alt="" loading="lazy"></span><small>${esc(o.source)}${o.lang&&o.lang!=="00"?" · "+esc(o.lang):""}${o.size?" · "+esc(o.size):""}</small></button>`).join("");
+    $("#pList").onclick=async e=>{const b=e.target.closest("[data-i]");if(!b)return;
+      $("#pMsg").textContent="Downloading…";[...$("#pList").children].forEach(x=>x.disabled=true);
+      try{await use(d.options[+b.dataset.i].url);$("#pickDlg").close()}
+      catch(err){$("#pMsg").innerHTML=`<span class="err">${esc(err.message)}</span>`;[...$("#pList").children].forEach(x=>x.disabled=false)}};
+  }catch(e){$("#pMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}
+}
+$("#pClose").onclick=()=>$("#pickDlg").close();
+
+/* ---------- deleting ---------- */
+const TRASH='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>';
+let delId=null,delInfo=null;
+const fileList=(names,total)=>`<ul class="flist">${names.map(n=>`<li>${esc(n)}</li>`).join("")}${total>names.length?`<li>…and ${total-names.length} more</li>`:""}</ul>`;
+async function openDelete(id){
+  delId=id;delInfo=null;
+  $("#dTitle").textContent="Delete…";$("#dWhere").textContent="";$("#dMsg").textContent="";
+  $("#dBody").innerHTML='<p class="note">Checking what would be removed…</p>';$("#dGo").disabled=true;
+  $("#delDlg").showModal();
+  try{
+    const d=delInfo=await api("/api/delete/preview",{id});
+    $("#dTitle").textContent=`Delete ${d.name}?`;
+    $("#dWhere").textContent=d.files[0];
+    let html=`<label class="choice"><input type="radio" name="dmode" value="files" ${d.suggested==="files"?"checked":""}>
+      <span><strong>Just this movie file</strong><small>${plural(d.files.length,"file")}, ${size(d.files_size)}: the video plus its subtitles, .nfo, images or trailer with the same name.</small>${fileList(d.files,d.files.length)}</span></label>`;
+    if(d.own)html+=`<label class="choice"><input type="radio" name="dmode" value="folder" ${d.suggested==="folder"?"checked":""}>
+      <span><strong>The whole movie folder</strong><small>“${esc(d.folder)}”: ${plural(d.folder_count,"file")}, ${size(d.folder_size)}, including artwork and trailers.${d.other_videos.length?` <span class="warn">This also deletes ${plural(d.other_videos.length,"other version")} of the movie.</span>`:""}</small>${fileList(d.folder_files,d.folder_count)}</span></label>`;
+    html+=d.permanent?`<p class="warn">This is on a network drive, which has no Recycle Bin. The files will be deleted permanently and can't be recovered.</p>`
+                     :`<p class="note">Files go to the Recycle Bin, so you can restore them from there if you change your mind.</p>`;
+    $("#dBody").innerHTML=html;
+    $("#dGo").textContent=d.permanent?"Delete permanently":"Move to Recycle Bin";$("#dGo").disabled=false;
+  }catch(e){$("#dBody").innerHTML=`<p class="err">${esc(e.message)}</p>`}
+}
+$("#dClose").onclick=()=>$("#delDlg").close();
+$("#dGo").onclick=async()=>{
+  const mode=document.querySelector('input[name="dmode"]:checked')?.value;if(!mode||!delInfo)return;
+  const done=busy($("#dGo"),"Deleting…");
+  try{const d=await api("/api/delete",{id:delId,mode});setRows(d.items);$("#delDlg").close();
+    const what=mode==="folder"?`the folder for ${d.name}`:d.name;
+    if(d.failed.length)status(`Couldn't delete everything for ${d.name}: ${d.failed.map(f=>`${f.name} (${f.error})`).join("; ")}`,true);
+    else finish(d.permanent?`Deleted ${what} permanently.`:`Moved ${what} to the Recycle Bin.`);
+  }catch(e){$("#dMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}
+  done();
+};
+
+/* ---------- YouTube login ---------- */
+$("#ytLogin").onchange=()=>{$("#ytFileBox").hidden=$("#ytLogin").value!=="file";$("#ytMsg").textContent=""};
+$("#ytTest").onclick=async()=>{
+  const done=busy($("#ytTest"),"Testing…");$("#ytMsg").textContent="";
+  try{const d=await api("/api/youtube-login/test",{yt_login:$("#ytLogin").value,yt_cookie_file:$("#ytFile").value});
+    $("#ytMsg").innerHTML=`<span class="tag r">${esc(d.message)}</span> Choose Save settings to keep it.`}
+  catch(e){$("#ytMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}
+  done();
+};
+
+/* ---------- subtitles ---------- */
+$("#subBtn").onclick=()=>$("#subDlg").showModal();
+$("#sClose").onclick=()=>$("#subDlg").close();
+$("#sGo").onclick=async()=>{
+  $("#subDlg").close();
+  try{const d=await runJob(ep("/api/subtitles"),{languages:$("#sLangs").value,hearing:$("#sHear").value,skip_embedded:$("#sEmb").checked},"Checking for changes",true);
+    applyResult(d);
+    let msg=`${d.cancelled?"Stopped":"Subtitles done"}: ${plural(d.downloaded,"subtitle")} downloaded`+(d.downloaded?` (${d.synced} made for your exact file)`:"")+
+      `, ${d.had} already there, ${d.none} not found.`+(d.remaining!=null?` ${d.remaining} downloads left today.`:"");
+    if(d.numbering)msg+=` ${d.numbering} skipped because TMDB numbers those episodes differently and no subtitle was made for that exact file.`;
+    if(d.quota)msg+=" "+d.quota;
+    if(d.failed.length)msg+=` ${d.failed.length} failed: ${d.failed.map(f=>`${f.name} (${f.error})`).join("; ")}`;
+    finish(msg,!!(d.failed.length||d.quota));
+  }catch(e){finish(e.message,true);if(/Settings/.test(e.message)&&$("#settings").hidden)$("#setBtn").click()}
+};
+
+/* ---------- trailers ---------- */
+$("#pCancel").onclick=()=>{if(jobId){$("#pCancel").disabled=true;api(`/api/job/${jobId}/cancel`,{}).catch(()=>{})}};
+$("#trBtn").onclick=()=>$("#trDlg").showModal();
+$("#tClose").onclick=()=>$("#trDlg").close();
+$("#tGo").onclick=async()=>{
+  $("#trDlg").close();
+  try{const d=await runJob(ep("/api/trailers"),{quality:+$("#tQ").value,force:$("#tForce").checked},"Checking for changes",true);applyResult(d);
+    const mb=Math.round(d.bytes/1e6);
+    finish(`${d.cancelled?"Stopped":"Trailers done"}: ${plural(d.downloaded,"trailer")} downloaded (${mb.toLocaleString()} MB${d.searched?`, ${d.searched} found by YouTube search`:""}), ${d.had} already there`+(d.fixed?`, ${d.fixed} renamed to match their movie`:"")+(d.replaced?`, ${d.replaced} wrong ${d.replaced===1?"trailer":"trailers"} replaced`:"")+`, ${d.none} had none on TMDB.`+
+      (d.failed.length?` ${d.failed.length} failed: ${d.failed.map(f=>`${f.name} (${f.error})`).join("; ")}`:""),!!d.failed.length);
+  }catch(e){finish(e.message,true)}
+};
+
+/* ---------- TV shows: table ---------- */
+let shows=[];
+function setShows(list){shows=list;rows=list;summary();render()}
+const subsOf=r=>Object.keys(r.has.subs||{}).sort();
+const tvHasCount=r=>(r.has.nfo?1:0)+(r.has.art?1:0)+(r.has.trailer?1:0)+(subsOf(r).length?1:0);
+function tvVisible(r,f){
+  const full=c=>c>=r.files;
+  switch(f){
+    case"missing":return r.missing>0;case"todo":return!r.named;case"ready":return r.named;
+    case"matched":return ok(r.match);case"review":return r.match&&r.match.status==="review";
+    case"unmatched":return!r.match||r.match.status==="none";
+    case"no-nfo":return!r.has.nfo||!full(r.has.ep_nfo);case"no-art":return!r.has.art;case"no-trailer":return!r.has.trailer;
+    case"no-subs":return!Object.values(r.has.subs||{}).some(full);default:return true}
+}
+function tvHasCell(r){
+  const b=(on,label,tip)=>`<span class="${on?"y":""}" title="${esc(tip)}">${label}</span>`;
+  const subs=subsOf(r),full=c=>c>=r.files;
+  const subTip=subs.length?"Subtitles: "+subs.map(l=>`${l} ${r.has.subs[l]} of ${r.files}`).join(", "):"No subtitles";
+  return `<span class="has">${b(r.has.nfo&&full(r.has.ep_nfo),"NFO",`tvshow.nfo ${r.has.nfo?"present":"missing"}; episode .nfo files: ${r.has.ep_nfo} of ${r.files}`)}${b(r.has.art,"ART",r.has.art?"Poster":"Poster missing")}${b(r.has.trailer,"TRL",r.has.trailer?"Trailer":"No trailer")}${b(subs.some(l=>full(r.has.subs[l])),subs.length?esc(subs.slice(0,3).join(" ").toUpperCase()):"SUB",subTip)}</span>`;
+}
+function renderTv(){
+  const q=$("#filter").value.trim().toLowerCase(),f=$("#show").value;
+  const val=(r,k)=>k==="match"?(r.match&&r.match.name)||`${r.title} (${r.year||""})`:k==="eps"?r.episodes:k==="has"?tvHasCount(r):k==="named"?(r.named?1:0):r[k];
+  const list=shows.filter(r=>tvVisible(r,f)&&(!q||`${r.title} ${r.folder} ${r.match?.name||""}`.toLowerCase().includes(q)))
+    .sort((a,b)=>{const x=val(a,key)??"",y=val(b,key)??"";return dir*(typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y),undefined,{numeric:true}))});
+  head();
+  $("#tbl tbody").innerHTML=list.map(r=>{
+    const seasons=r.seasons.filter(s=>s>0).length;
+    const eps=`${plural(r.episodes,"episode")} · ${plural(seasons,"season")}${r.seasons.includes(0)?" + specials":""}`+
+      (r.missing?` <span class="tag t" title="Aired episodes with no file">${r.missing} missing</span>`:r.missing===0?` <span class="tag r">complete</span>`:"")+
+      (r.extras?` <span class="note">· ${plural(r.extras,"extra")}</span>`:"");
+    return `<tr><td><button class="delbtn" data-del="${esc(r.id)}" aria-label="Delete ${esc(r.title)}" title="Delete show…">${TRASH}</button></td><td>${matchCell(r)}</td><td>${eps}</td><td>${tvHasCell(r)}</td>
+      <td><span class="tag ${r.named?"r":"t"}">${r.named?"Named":plural(r.to_rename,"file")+" to rename"}</span></td><td class="num">${size(r.size)}</td><td class="file" title="${esc(r.folder)}"><div>${esc(r.folder)}</div></td></tr>`}).join("");
+  $("#tbl").hidden=!list.length;$("#msg").hidden=!!list.length;
+  if(!list.length)$("#msg").textContent=shows.length?"No shows match this filter.":"No episodes found in this folder.";
+}
+function summaryTv(){
+  const n=shows.length,good=shows.filter(r=>r.named).length,eps=shows.reduce((a,r)=>a+r.episodes,0);
+  const matched=shows.filter(r=>ok(r.match)).length,review=shows.filter(r=>r.match&&r.match.status==="review").length;
+  const missing=shows.reduce((a,r)=>a+(r.missing||0),0);
+  $("#counts").innerHTML=`<strong>${n}</strong> shows, <strong>${eps.toLocaleString()}</strong> episodes. <strong>${good}</strong> named for Jellyfin; <strong>${n-good}</strong> need renaming. TMDB: <strong>${matched}</strong> matched, <strong>${review}</strong> need review.`+
+    (missing?` <strong>${missing}</strong> aired ${missing===1?"episode is":"episodes are"} missing.`:"");
+  $("#mr").style.width=n?good/n*100+"%":"0";$("#mt").style.width=n?(n-good)/n*100+"%":"0";
+  $("#summary").hidden=$("#tools").hidden=$("#actions").hidden=false;
+}
+
+/* ---------- switching between Movies and TV shows ---------- */
+function applyMode(){
+  COLS=mode==="tv"?TV_COLS:MOVIE_COLS;key="match";dir=1;rows=[];shows=[];
+  $("#tabMovies").setAttribute("aria-selected",mode==="movies");$("#tabTv").setAttribute("aria-selected",mode==="tv");
+  $("#appTitle").textContent=mode==="tv"?"TV library":"Movie library";document.title=$("#appTitle").textContent;
+  $("#folder").value="";$("#folder").placeholder=mode==="tv"?"TV shows folder, for example D:\\Media\\Shows":"Movie folder, for example D:\\Movies";
+  $("#folder").setAttribute("aria-label",mode==="tv"?"TV shows folder":"Movie folder");
+  $("#filter").placeholder=mode==="tv"?"Filter by show or folder":"Filter by title, year or file name";
+  $("#show").innerHTML=(mode==="tv"?TV_FILTERS:MOVIE_FILTERS).map(([v,l])=>`<option value="${v}">${l}</option>`).join("");
+  $("#summary").hidden=$("#tools").hidden=$("#actions").hidden=true;$("#tbl").hidden=true;$("#msg").hidden=false;
+  $("#msg").textContent=mode==="tv"?"Enter the folder that holds your TV shows (one folder per show), then choose Scan folder.":"Enter the folder that holds your movies, then choose Scan folder. Next time, your library opens automatically.";
+  $("#prog").hidden=true;
+}
+function switchMode(m){if(m===mode||jobId)return;mode=m;localStorage.setItem("mm-mode",m);applyMode();loadLibrary()}
+$("#tabMovies").onclick=()=>switchMode("movies");
+$("#tabTv").onclick=()=>switchMode("tv");
+
+/* ---------- one show: seasons, episodes, artwork, edits ---------- */
+let showKey=null,showData=null;
+const tvImg=(src)=>src?`<img src="${esc(src)}" alt="" loading="lazy">`:`<span class="ph"></span>`;
+function showHero(d){
+  const i=d.info;
+  $("#shName").textContent=i.title+(i.year?` (${i.year})`:"");
+  $("#shMeta").textContent=[(i.networks||[]).join(", "),i.status,i.mpaa,(i.genres||[]).join(", ")].filter(Boolean).join(" · ");
+  $("#shPoster").src=d.images.poster||"";$("#shPoster").hidden=!d.images.poster;
+  $("#shHero").style.backgroundImage=d.images.fanart?`url("${d.images.fanart}")`:"none";
+}
+function episodeRow(e,season){
+  const code=`${String(e.episode).padStart(2,"0")}`;
+  if(e.same_file)return `<tr class="gone"><td class="n">${code}</td><td>${esc(e.name)}<div class="fn">in the same file as the episode before</div></td><td class="d">${esc(e.aired||"")}</td><td></td><td></td></tr>`;
+  if(!e.file)return `<tr class="gone"><td class="n">${code}</td><td>${esc(e.name)}</td><td class="d">${esc(e.aired||"")}</td><td colspan="2">${e.future?'<span class="tag n">Upcoming</span>':season===0?'<span class="tag n">No file</span>':'<span class="tag t">Missing</span>'}</td></tr>`;
+  const h=e.has||{},b=(on,l,t)=>`<span class="${on?"y":""}" title="${t}">${l}</span>`;
+  return `<tr><td class="n">${code}</td><td>${esc(e.name)}${e.unknown?' <span class="note">(not on TMDB)</span>':""}${e.season_guessed?' <span class="note">(season guessed)</span>':""}<div class="fn">${esc(e.file)} · ${size(e.size)}${e.named?(e.mismatch?' · <span title="TMDB lists a different episode under this number (tinyMediaManager may have used TVDB\'s numbering). Its .nfo, thumbnail and subtitles are left alone.">TMDB numbers this differently</span>':""):e.mismatch?' · <span title="Its episode title doesn\'t match TMDB\'s for this number (it may be an extra, or numbered differently), or it holds episodes that aren\'t next to each other. The renamer leaves it alone.">left alone: its name doesn\'t fit TMDB\'s episode list</span>':' · <span style="color:var(--todo)">needs renaming</span>'}</div></td><td class="d">${esc(e.aired||"")}</td>
+    <td><span class="has">${b(h.nfo,"NFO",".nfo file")}${b(h.thumb,"THB","Thumbnail")}${b((h.subs||[]).length,(h.subs||[]).length?esc(h.subs.join(" ").toUpperCase()):"SUB","Subtitles")}</span></td>
+    <td><button class="delbtn" data-del-ep="${esc(e.id)}" aria-label="Delete this episode" title="Delete episode…">${TRASH}</button></td></tr>`;
+}
+function showViewFrom(d){
+  const i=d.info,e=d.edits||{},ed=k=>k in e?`<span class="edited" title="You edited this">✎ edited</span>`:"";
+  const row=(k,v,key)=>v?`<dt>${k}</dt><dd>${v}${key?ed(key):""}</dd>`:"";
+  let h=`<p>${esc(i.plot)||'<span class="note">No plot.</span>'}${ed("plot")}</p><dl class="facts">`
+    +row("Original title",i.originaltitle&&i.originaltitle!==i.title?esc(i.originaltitle):"","originaltitle")+row("Genres",esc((i.genres||[]).join(", ")),"genres")
+    +row("Network",esc((i.networks||[]).join(", ")))+row("Status",esc(i.status))+row("First aired",esc(i.first_aired))
+    +row("Age rating",esc(i.mpaa),"mpaa")+row("Episode length",i.runtime?`${i.runtime} min`:"")+row("Rating",i.rating?`TMDB ${(+i.rating).toFixed(1)}`:"")
+    +row("Links",[i.tmdb_id&&`<a href="https://www.themoviedb.org/tv/${i.tmdb_id}" target="_blank" rel="noopener">TMDB</a>`,i.tvdb_id&&`<a href="https://thetvdb.com/dereferrer/series/${i.tvdb_id}" target="_blank" rel="noopener">TVDB</a>`,i.imdb_id&&`<a href="https://www.imdb.com/title/${esc(i.imdb_id)}/" target="_blank" rel="noopener">IMDb</a>`].filter(Boolean).join(" · "))+`</dl>`;
+  if((i.cast||[]).length)h+=`<h3 style="font-size:1rem;margin:10px 0 4px">Cast</h3><ul class="cast">${i.cast.slice(0,12).map(a=>`<li>${a.thumb?`<img src="${esc(a.thumb)}" alt="" loading="lazy">`:`<span class="ph"></span>`}<span>${esc(a.name)}<small>${esc(a.role)}</small></span></li>`).join("")}</ul>`;
+  h+=`<h3 style="font-size:1rem;margin:14px 0 4px">Artwork</h3><div class="artgrid">${d.artwork.map(a=>`<div class="artcard"><div class="pic">${a.url?`<img src="${esc(a.url)}" alt="${esc(a.label)}" loading="lazy">`:"missing"}</div>
+      <div class="row"><span title="${esc(a.file||"")}">${esc(a.label)}</span>${d.editable?`<button class="ghost small" data-sart="${a.kind}" data-label="${esc(a.label)}">${a.url?"Change…":"Add…"}</button>`:""}</div></div>`).join("")}</div>`;
+  const missingTotal=d.seasons.reduce((a,s)=>a+s.missing,0);
+  h+=`<h3 style="font-size:1rem;margin:14px 0 4px">Seasons</h3><p class="note" style="margin:0 0 8px">${d.match&&ok(d.match)?`Episode list from TMDB${d.fetched?`, checked ${new Date(d.fetched*1000).toLocaleDateString()}`:""}.`:"Match this show to see its full episode list."}${missingTotal?` ${missingTotal} aired ${missingTotal===1?"episode is":"episodes are"} missing.`:""}</p><div class="seasons">`;
+  h+=d.seasons.map((s,ix)=>`<details${s.missing||ix===0?" open":""}><summary>${tvImg(s.poster)}<span class="grow"><span class="sn">${esc(s.name)}</span> <span class="note">· ${s.have} of ${s.aired} ${s.season===0?"":"aired "}episodes${s.unknown?` + ${s.unknown} not on TMDB`:""}</span>${s.missing?` <span class="tag t">${s.missing} missing</span>`:""}</span>
+      ${d.editable?`<button class="ghost small" data-season-art="${s.season}" title="Choose this season's poster">Poster…</button>`:""}${s.have?` <button class="delbtn" data-del-season="${s.season}" aria-label="Delete ${esc(s.name)}" title="Delete season…">${TRASH}</button>`:""}</summary>
+      <table class="eps"><tbody>${s.episodes.map(e=>episodeRow(e,s.season)).join("")||'<tr><td class="note">No episodes.</td></tr>'}</tbody></table></details>`).join("");
+  h+=`</div>`;
+  if(d.extras.length)h+=`<h3 style="font-size:1rem;margin:14px 0 4px">Other videos (left as they are)</h3><ul class="files">${d.extras.map(x=>`<li><span class="k">extra</span><span class="n">${esc(x.file)}</span><span class="s">${size(x.size)}</span></li>`).join("")}</ul>`;
+  h+=`<p class="note">Show details from ${d.nfo?`tvshow.nfo${d.by_tmm?" (written by tinyMediaManager)":""} and TMDB`:"TMDB (there's no tvshow.nfo yet)"}. Folder: ${esc(d.folder)}.</p>`;
+  $("#shView").innerHTML=h;
+}
+function showEditMode(on){
+  $("#shView").hidden=on;$("#shEdit").hidden=!on;$("#shViewBtns").hidden=on;$("#shEditBtns").hidden=!on;$("#shMsg").textContent="";
+  if(on){const i=showData.info;
+    $("#stTitle").value=i.title||"";$("#stOriginal").value=i.originaltitle||"";$("#stSort").value=i.sorttitle||"";$("#stYear").value=i.year||"";
+    $("#stMpaa").value=i.mpaa||"";$("#stPlot").value=i.plot||"";$("#stGenres").value=(i.genres||[]).join(", ");
+    $("#shReset").hidden=!Object.keys(showData.edits||{}).length;$("#stTitle").focus()}
+}
+async function openShow(k,keepOpen){
+  showKey=k;current=shows.find(r=>r.id===k)||current;
+  if(!$("#shDlg").open)$("#shDlg").showModal();
+  if(!keepOpen){showEditMode(false);$("#shName").textContent="Loading…";$("#shMeta").textContent="";$("#shView").innerHTML='<p class="note">Loading seasons and episodes…</p>';$("#shPoster").hidden=true;$("#shHero").style.backgroundImage="none"}
+  try{showData=await api(`/api/tv/show?key=${encodeURIComponent(k)}`);showHero(showData);showViewFrom(showData);
+    $("#shEditBtn").disabled=$("#shRefresh").disabled=!showData.editable}
+  catch(e){$("#shView").innerHTML=`<p class="err">${esc(e.message)}</p>`}
+}
+async function saveShow(reset){
+  if(reset&&!confirm("Forget your edits for this show and go back to TMDB's details?"))return;
+  const fields={title:$("#stTitle").value,originaltitle:$("#stOriginal").value,sorttitle:$("#stSort").value,year:$("#stYear").value,mpaa:$("#stMpaa").value,plot:$("#stPlot").value,genres:$("#stGenres").value};
+  const done=busy(reset?$("#shReset"):$("#shSave"),"Saving…");
+  try{showData=await api("/api/tv/edit",{key:showKey,fields,reset});showHero(showData);showViewFrom(showData);showEditMode(false);
+    $("#shMsg").innerHTML=`<span class="tag r">${reset?"Back to TMDB's details.":"Saved to tvshow.nfo."}</span>`}
+  catch(e){$("#shMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}
+  done();
+}
+async function tvDelete(k,what,extra={}){
+  try{
+    const p=await api("/api/tv/delete/preview",{key:k,what,...extra});
+    const name=(shows.find(r=>r.id===k)||{}).title||"this show";
+    const label=what==="show"?`the whole show “${name}”`:what==="season"?`${extra.season===0?"the specials":"season "+extra.season} of ${name}`:"this episode";
+    const list=p.targets.slice(0,6).join("\n")+(p.targets.length>6?`\n…and ${p.targets.length-6} more`:"");
+    const how=p.permanent?"PERMANENTLY delete (this is a network drive with no Recycle Bin)":"Move to the Recycle Bin";
+    if(!confirm(`${how} ${label}?\n\n${plural(p.count,"file")}, ${size(p.size)}${p.episodes?`, ${plural(p.episodes,"episode")}`:""}:\n${list}`))return;
+    const d=await api("/api/tv/delete",{key:k,what,...extra});setShows(d.shows);
+    if(d.failed.length)status(`Couldn't delete everything: ${d.failed.map(f=>`${f.name} (${f.error})`).join("; ")}`,true);
+    else finish(p.permanent?`Deleted ${label} permanently.`:`Moved ${label} to the Recycle Bin.`);
+    if(what==="show")$("#shDlg").close();else if($("#shDlg").open)openShow(k,true);
+  }catch(e){if($("#shDlg").open)$("#shMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`;else finish(e.message,true)}
+}
+$("#shView").addEventListener("click",e=>{
+  const a=e.target.closest("[data-sart]");
+  if(a){const kind=a.dataset.sart,label=a.dataset.label;e.preventDefault();
+    return pickFrom(kind,label,`/api/tv/artwork/options?key=${encodeURIComponent(showKey)}&kind=${kind}`,
+      async url=>{showData=await api("/api/tv/artwork/set",{key:showKey,kind,url});showHero(showData);showViewFrom(showData);$("#shMsg").innerHTML=`<span class="tag r">${esc(label)} updated.</span>`})}
+  const sp=e.target.closest("[data-season-art]");
+  if(sp){e.preventDefault();const season=sp.dataset.seasonArt;
+    return pickFrom("season",season==="0"?"specials poster":`season ${season} poster`,`/api/tv/artwork/options?key=${encodeURIComponent(showKey)}&kind=season&season=${season}`,
+      async url=>{showData=await api("/api/tv/artwork/set",{key:showKey,kind:"season",url,season:+season});showViewFrom(showData);$("#shMsg").innerHTML=`<span class="tag r">Season poster updated.</span>`})}
+  const ds=e.target.closest("[data-del-season]");if(ds){e.preventDefault();return tvDelete(showKey,"season",{season:+ds.dataset.delSeason})}
+  const de=e.target.closest("[data-del-ep]");if(de)return tvDelete(showKey,"episode",{id:de.dataset.delEp});
+});
+$("#shClose").onclick=()=>$("#shDlg").close();
+$("#shEditBtn").onclick=()=>showEditMode(true);
+$("#shCancel").onclick=()=>showEditMode(false);
+$("#shSave").onclick=()=>saveShow(false);
+$("#shReset").onclick=()=>saveShow(true);
+$("#shEdit").onsubmit=e=>{e.preventDefault();saveShow(false)};
+$("#shMatch").onclick=()=>openMatch(showKey);
+$("#shDel").onclick=()=>tvDelete(showKey,"show");
+$("#shOpen").onclick=async()=>{try{await api("/api/tv/open-folder",{key:showKey});$("#shMsg").textContent="Opened in Explorer."}catch(e){$("#shMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}};
+$("#shRefresh").onclick=async()=>{const done=busy($("#shRefresh"),"Refreshing…");
+  try{showData=await api("/api/tv/refresh",{key:showKey});showHero(showData);showViewFrom(showData);$("#shMsg").innerHTML='<span class="tag r">Episode list refreshed from TMDB.</span>';
+    const d=await api("/api/tv/library");if(d.shows)setShows(d.shows)}
+  catch(e){$("#shMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}done()};
+
+/* ---------- keep the app running while this tab is open; it quits when the tab closes ---------- */
+let pingFails=0,pingTimer=null,appVersion=null;
+async function ping(){
+  try{const r=await fetch("/api/ping",{method:"POST"});if(!r.ok)throw 0;
+    const v=(await r.json()).version;if(appVersion&&v&&v!==appVersion){location.reload();return}appVersion=v||appVersion;
+    if(pingFails>=2){JOB_BUTTONS.forEach(s=>$(s).disabled=false);status("Reconnected to the app.");loadLibrary()}
+    pingFails=0}
+  catch{if(++pingFails===2){JOB_BUTTONS.forEach(s=>$(s).disabled=true);status("The app has stopped. Run run.bat to start it again; this page reconnects by itself.",true)}}
+  clearTimeout(pingTimer);pingTimer=setTimeout(ping,pingFails?2000:15000);  // while disconnected, check every 2 s
+}
+ping();
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")ping()});
+addEventListener("pagehide",()=>navigator.sendBeacon("/api/bye"));
+
+applyMode();
+loadLibrary();
+fetch("/api/config").then(r=>r.json()).then(c=>{const f=mode==="tv"?c.tv_folder:c.folder;if(f&&!$("#folder").value)$("#folder").value=f;showSettings(c);if(!c.has_key)$("#setMsg").innerHTML+=" <strong>Add your key to start matching.</strong>"}).catch(()=>{});
+</script>
+</body>
+</html>

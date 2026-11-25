@@ -1,0 +1,6 @@
+flask>=3.0
+guessit>=3.8
+yt-dlp[default]>=2025.11.12
+imageio-ffmpeg>=0.5
+deno>=2.0
+send2trash>=1.8

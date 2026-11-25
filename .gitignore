@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Your settings: API keys, passwords and logins. Never commit this.
+config.json
+
+# Your library data (scans, matches, edits, caches, rename history): personal, and rebuilt by the app
+library.json
+matches.json
+edits.json
+rename_log.json
+tv_library.json
+tv_matches.json
+tv_cache.json
+tv_rename_log.json
+movie_cache.json
+collections.json
+trakt.json
+library-*.json
+tv_library-*.json
+
+# Temporary files the app writes while saving
+*.tmp
+*.part
+*.new
