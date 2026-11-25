@@ -64,7 +64,7 @@ def plan() -> dict:
                 used.setdefault(key_of(season_dir), set()).add(moved.stem.lower())
                 continue  # only the show folder's name was wrong; this file is fine inside it
             if data is None:
-                data = tvmeta.show_data(m["tmdb_id"])
+                data = tvmeta.data_for(m)
             stem = episode_stem(title, it["season"], it["episodes"], data)
             taken = used.setdefault(key_of(season_dir), set())
             if stem.lower() in taken:  # two files of the same episode

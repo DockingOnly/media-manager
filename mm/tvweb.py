@@ -102,8 +102,20 @@ def tv_refresh():
     m = eps[0]["match"]
     if not tvlib.confirmed(m):
         raise UserError("Match this show first.")
-    tvmeta.show_data(m["tmdb_id"], refresh=True)
+    tvmeta.data_for(m, refresh=True)
     return jsonify(tvshow.detail(key))
+
+
+@app.get("/api/tv/orders")
+def tv_orders():
+    """The episode orders this show can follow, and how well each fits your files."""
+    return jsonify(tvshow.order_fit(request.args.get("key", "")))
+
+
+@app.post("/api/tv/order")
+def tv_order():
+    d = body()
+    return jsonify(tvshow.set_order(d.get("key", ""), d.get("order") or None, d.get("season_orders") or {}))
 
 
 @app.post("/api/tv/edit")

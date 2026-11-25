@@ -30,7 +30,7 @@ FANART_TYPES = {  # fanart.tv's names, best first
 }
 TMDB_SIZES = {"poster": ("w342", "w780"), "fanart": ("w300", "w1280"), "landscape": ("w300", "w1280"),
               "logo": ("w300", "original")}
-ALLOWED_HOSTS = {"image.tmdb.org", "assets.fanart.tv"}
+ALLOWED_HOSTS = {"image.tmdb.org", "assets.fanart.tv", "static.tvmaze.com"}
 FANART_API = "https://webservice.fanart.tv/v3/"
 _cache = {}  # (source, tmdb_id) -> data, for this session
 

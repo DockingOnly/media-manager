@@ -88,7 +88,7 @@ def build_episode(data: dict, season: int, number: int):
         sub(root, "director", d)
     for w in dict.fromkeys(e["writers"]):
         sub(root, "credits", w)
-    sub(root, "thumb", image_url(e["still_path"], "w780"))
+    sub(root, "thumb", e.get("still_url") or image_url(e.get("still_path"), "w780"))
     return root
 
 
@@ -173,7 +173,7 @@ def write_all(job: dict, root: Path, overwrite: bool) -> dict:
         m = eps[0]["match"]
         try:
             core.set_detail(job, m["name"])
-            data = tvmeta.show_data(m["tmdb_id"])
+            data = tvmeta.data_for(m)
             show_dir = root / eps[0]["show_dir"] if eps[0].get("show_dir") else None
             if show_dir and write_show(show_dir, data, m["tmdb_id"], overwrite):
                 res["show_nfos"] += 1

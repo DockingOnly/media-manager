@@ -149,6 +149,9 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 .eps td.n{width:3em;color:var(--muted);text-align:right}.eps td.d{width:7em;color:var(--muted);white-space:nowrap}
 .eps .fn{color:var(--muted);font-size:.9em;word-break:break-all}
 .eps tr.gone td{color:var(--muted)}
+.orders{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:0 0 10px;background:var(--bg)}
+.orders li{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line)}
+.orders li:last-child{border-bottom:0}.orders ul{list-style:none;margin:6px 0 0;padding:0}
 </style>
 </head>
 <body>
@@ -961,7 +964,8 @@ function showViewFrom(d){
   h+=`<h3 style="font-size:1rem;margin:14px 0 4px">Artwork</h3><div class="artgrid">${d.artwork.map(a=>`<div class="artcard"><div class="pic">${a.url?`<img src="${esc(a.url)}" alt="${esc(a.label)}" loading="lazy">`:"missing"}</div>
       <div class="row"><span title="${esc(a.file||"")}">${esc(a.label)}</span>${d.editable?`<button class="ghost small" data-sart="${a.kind}" data-label="${esc(a.label)}">${a.url?"Change…":"Add…"}</button>`:""}</div></div>`).join("")}</div>`;
   const missingTotal=d.seasons.reduce((a,s)=>a+s.missing,0);
-  h+=`<h3 style="font-size:1rem;margin:14px 0 4px">Seasons</h3><p class="note" style="margin:0 0 8px">${d.match&&ok(d.match)?`Episode list from TMDB${d.fetched?`, checked ${new Date(d.fetched*1000).toLocaleDateString()}`:""}.`:"Match this show to see its full episode list."}${missingTotal?` ${missingTotal} aired ${missingTotal===1?"episode is":"episodes are"} missing.`:""}</p><div class="seasons">`;
+  const so=Object.keys((d.match||{}).season_orders||{}).length,ord=d.order==="tvmaze"?"TVmaze":d.order?"an alternative TMDB order":"TMDB";
+  h+=`<h3 style="font-size:1rem;margin:14px 0 4px">Seasons</h3><p class="note" style="margin:0 0 8px">${d.match&&ok(d.match)?`Episode list in ${ord}'s order${so?` (with ${plural(so,"season")} following another order)`:""}${d.fetched?`, checked ${new Date(d.fetched*1000).toLocaleDateString()}`:""}. ${d.editable?'<button class="ghost small" id="shOrderBtn" title="Choose which episode numbering this show follows">Episode order…</button>':""}`:"Match this show to see its full episode list."}${missingTotal?` ${missingTotal} aired ${missingTotal===1?"episode is":"episodes are"} missing.`:""}</p><div id="shOrders"></div><div class="seasons">`;
   h+=d.seasons.map((s,ix)=>`<details${s.missing||ix===0?" open":""}><summary>${tvImg(s.poster)}<span class="grow"><span class="sn">${esc(s.name)}</span> <span class="note">· ${s.have} of ${s.aired} ${s.season===0?"":"aired "}episodes${s.unknown?` + ${s.unknown} not on TMDB`:""}</span>${s.missing?` <span class="tag t">${s.missing} missing</span>`:""}</span>
       ${d.editable?`<button class="ghost small" data-season-art="${s.season}" title="Choose this season's poster">Poster…</button>`:""}${s.have?` <button class="delbtn" data-del-season="${s.season}" aria-label="Delete ${esc(s.name)}" title="Delete season…">${TRASH}</button>`:""}</summary>
       <table class="eps"><tbody>${s.episodes.map(e=>episodeRow(e,s.season)).join("")||'<tr><td class="note">No episodes.</td></tr>'}</tbody></table></details>`).join("");
@@ -1008,7 +1012,25 @@ async function tvDelete(k,what,extra={}){
     if(what==="show")$("#shDlg").close();else if($("#shDlg").open)openShow(k,true);
   }catch(e){if($("#shDlg").open)$("#shMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`;else finish(e.message,true)}
 }
-$("#shView").addEventListener("click",e=>{
+async function showOrders(){
+  const box=$("#shOrders");box.innerHTML='<div class="orders note">Comparing each episode order with the titles in your file names and .nfo files…</div>';
+  try{const r=await api(`/api/tv/orders?key=${encodeURIComponent(showKey)}`);
+    const row=(label,score,cur,best,data)=>`<li><span>${label}${best?' <span class="tag r">best fit</span>':""}<br><small class="note">${score}</small></span>${cur?'<span class="tag n">in use</span>':`<button class="ghost small" data-use-order='${esc(JSON.stringify(data))}'>Use this</button>`}</li>`;
+    let h=`<div class="orders"><strong>Episode order</strong><p class="note" style="margin:4px 0 0">Which numbering this show follows. The best fit is the one most of your files' episode titles agree with (tinyMediaManager used TVDB's order, which TVmaze usually matches). Titles, missing episodes, renaming, .nfo files and thumbnails all follow it.</p><ul>`;
+    if(r.mix)h+=row(`Best fit per season: TMDB, except ${esc(r.mix.description)}`,`${r.mix.agree} of ${r.mix.compared} files agree`,r.mix.current,true,{order:r.main||null,season_orders:r.mix.season_orders});
+    h+=r.orders.map(o=>row(esc(o.name),o.error?esc(o.error):`${o.agree} of ${o.compared} files agree`,o.current,o.best,{order:o.id,season_orders:{}})).join("");
+    box.innerHTML=h+`</ul><button class="ghost small" id="shOrderClose" style="margin-top:6px">Close</button></div>`;
+  }catch(e){box.innerHTML=`<div class="orders err">${esc(e.message)}</div>`}
+}
+$("#shView").addEventListener("click",async e=>{
+  if(e.target.closest("#shOrderBtn"))return showOrders();
+  if(e.target.closest("#shOrderClose")){$("#shOrders").innerHTML="";return}
+  const uo=e.target.closest("[data-use-order]");
+  if(uo){const body=JSON.parse(uo.dataset.useOrder);uo.disabled=true;uo.textContent="Switching…";
+    try{showData=await api("/api/tv/order",{key:showKey,...body});showViewFrom(showData);$("#shMsg").innerHTML='<span class="tag r">Episode order changed.</span>';
+      const d=await api("/api/tv/library");if(d.shows)setShows(d.shows)}
+    catch(err){$("#shMsg").innerHTML=`<span class="err">${esc(err.message)}</span>`;uo.disabled=false;uo.textContent="Use this"}
+    return}
   const a=e.target.closest("[data-sart]");
   if(a){const kind=a.dataset.sart,label=a.dataset.label;e.preventDefault();
     return pickFrom(kind,label,`/api/tv/artwork/options?key=${encodeURIComponent(showKey)}&kind=${kind}`,

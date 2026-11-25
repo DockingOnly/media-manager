@@ -12,7 +12,7 @@ from guessit import guessit
 from . import core, library
 from .core import key_of, norm_title
 
-TV_VERSION = 3  # bump when name reading changes, so saved scans are re-read
+TV_VERSION = 4  # bump when name reading changes, so saved scans are re-read
 SXXEYY = re.compile(r"(?<![a-z0-9])S(\d{1,3})[ ._]?E(\d{1,4})((?:[ ._-]*(?:S\1[ ._]?)?E\d{1,4})*)", re.I)
 # Release information that can follow an episode code ('Loki.S01E01.1080p.DSNP.WEB-DL.x265'): not a title
 RELEASE_WORDS = re.compile(r"(?i)\b(?:\d{3,4}p|4k|uhd|hdr\d*|dv|sdr|web(?:[ .-]?(?:dl|rip))?|webrip|bluray|blu[ .-]?ray|brrip|bdrip|"
@@ -64,10 +64,13 @@ def parse(path: Path, root: Path) -> dict:
         episodes = [int(x) for x in (e if isinstance(e, list) else [e])] if e is not None else None
         s = guess.get("season")
         season = s if isinstance(s, int) else None
+        if season == 0 and not re.search(r"(?i)(?<![a-z0-9])(s0+(?![0-9])|0x\d|season[ ._-]*0+\b|specials?\b)", stem):
+            season = None  # 'Show - 001' is absolute episode 1, not season 0 (the reader takes the leading 0 as a season)
     from_folder = folder_season(path, show_dir)
     if season is None:
         season = from_folder
-    if episodes and season is None:
+    guessed = bool(episodes) and season is None
+    if guessed:
         season = 1  # absolute numbering without seasons: assume season 1 (shown as a guess)
     series = str(core.first(guess.get("title")) or "")
     if show_dir is not None:
@@ -77,7 +80,7 @@ def parse(path: Path, root: Path) -> dict:
         "kind": "episode" if episodes else "extra",
         "season": season if episodes else None,
         "episodes": episodes,
-        "season_guessed": bool(episodes) and from_folder is None and not m and guess.get("season") is None,
+        "season_guessed": guessed,
         "series": series,
         # after an explicit S01E02, the episode title is simply what follows it ('Show - S01E02 - Title')
         "ep_title": ((clean_title(stem[m.end():]) if m else "") or str(guess.get("episode_title") or "")) if episodes else "",
@@ -283,7 +286,7 @@ def annotate(items: list, root: Path) -> list:
             # A file holding episodes that aren't next to each other (S07E01 + S07E12) can't be written as
             # Jellyfin's range (S07E01-E12 would claim 1 to 12), so it's left as it is, like a title mismatch.
             gap = len(eps) > 1 and eps != list(range(eps[0], eps[-1] + 1))
-            it["mismatch"] = gap or not title_agrees(it, tvmeta.cached(it["match"]["tmdb_id"]))
+            it["mismatch"] = gap or not title_agrees(it, tvmeta.cached_for(it["match"]))
     return items
 
 
@@ -298,7 +301,7 @@ def summaries(items: list, root: Path) -> list:
         have = {(e["season"], n) for e in episodes for n in e["episodes"]}
         names = {n.lower() for n in os.listdir(show_dir)} if show_dir and show_dir.is_dir() else set()
         title, year = show_title_year(show_dir.name) if show_dir else (eps[0]["series"], None)
-        data = tvmeta.cached(m["tmdb_id"]) if confirmed(m) else None
+        data = tvmeta.cached_for(m) if confirmed(m) else None
         missing = tvmeta.missing_episodes(data, have) if data else None
         subs = {}
         for e in episodes:

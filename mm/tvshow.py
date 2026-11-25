@@ -31,9 +31,9 @@ def detail(key: str) -> dict:
     data = None
     if tvlib.confirmed(m):
         try:
-            data = tvmeta.show_data(m["tmdb_id"])
-        except core.TmdbError:
-            data = tvmeta.cached(m["tmdb_id"])
+            data = tvmeta.data_for(m)
+        except (core.TmdbError, UserError):
+            data = tvmeta.cached_for(m) or tvmeta.cached(m["tmdb_id"])
     nfo_info = None
     if show_dir and (show_dir / "tvshow.nfo").is_file():
         root_el = nfo.parse_xml((show_dir / "tvshow.nfo").read_bytes(), "tvshow")
@@ -99,10 +99,89 @@ def detail(key: str) -> dict:
                         "episodes": sorted(rows, key=lambda r: r["episode"])})
     extras = [{"file": core.rel(Path(root, it["path"]), show_dir or root), "id": it["id"], "size": it["size"]}
               for it in eps if it["kind"] == "extra"]
-    return {"key": key, "match": m, "info": info, "edits": edits, "editable": tvlib.confirmed(m), "images": images,
+    order = (m or {}).get("order")
+    return {"key": key, "match": m, "order": order, "info": info, "edits": edits, "editable": tvlib.confirmed(m), "images": images,
             "artwork": art, "seasons": seasons, "extras": extras, "folder": eps[0]["show_dir"] or "(loose files)",
             "nfo": "tvshow.nfo" if nfo_info else None, "by_tmm": bool(nfo_info and nfo_info.get("by_tmm")),
             "fetched": (data or {}).get("fetched")}
+
+
+def order_fit(key: str) -> dict:
+    """Each episode order this show can follow, scored by how many of your files' episode titles (from their
+    names and .nfo files) agree with it, for the whole show and season by season. Also suggests the best order
+    for each season (a show's files can follow TMDB for most seasons and TVDB/TVmaze for others)."""
+    with core.lock:
+        eps, root, _ = find(key)
+    m = eps[0]["match"]
+    if not tvlib.confirmed(m):
+        raise UserError("Match this show on TMDB (and confirm the match) first.")
+    samples = []
+    for it in eps:
+        if it["kind"] != "episode":
+            continue
+        titles = [it["ep_title"]] if it.get("ep_title") else []
+        nfo_path = Path(root, it["path"]).with_suffix(".nfo")
+        if nfo_path.is_file():
+            titles += [r.findtext("title") for r in nfo.parse_all(nfo_path.read_bytes()) if r.findtext("title")]
+        if titles:
+            samples.append((it, titles))
+    orders, per_season = [], {}
+    for opt in tvmeta.order_options(m["tmdb_id"]):
+        try:
+            data = tvmeta.data_for({"tmdb_id": m["tmdb_id"], "order": opt["id"]})
+        except (UserError, core.TmdbError) as err:
+            orders.append({**opt, "error": str(err), "agree": 0, "compared": len(samples)})
+            continue
+        agree = 0
+        for it, titles in samples:
+            ok = any(tvlib.title_agrees({**it, "ep_title": t}, data) and
+                     any((tvmeta.episode(data, it["season"], n) or {}).get("name") for n in it["episodes"]) for t in titles)
+            agree += ok
+            cell = per_season.setdefault(str(it["season"]), {}).setdefault(opt["id"] or "", [0, 0])
+            cell[0] += ok
+            cell[1] += 1
+        orders.append({**opt, "agree": agree, "compared": len(samples)})
+    whole = m.get("order")
+    current = {str(s): o for s, o in (m.get("season_orders") or {}).items()}
+    for o in orders:
+        o["current"] = o["id"] == whole and not current
+    # the best order for each season; on a tie, the show's main order (or TMDB's)
+    suggested, mix_agree = {}, 0
+    for season, cells in per_season.items():
+        best = max(cells.items(), key=lambda kv: (kv[1][0], kv[0] == (whole or "")))
+        mix_agree += best[1][0]
+        if best[0] != (whole or ""):
+            suggested[season] = best[0] or None
+    best_whole = max(orders, key=lambda o: (o["agree"], o["id"] == whole)) if orders else None
+    names = {o["id"] or "": o["name"] for o in orders}
+    mix = None
+    if suggested and best_whole and mix_agree > best_whole["agree"]:
+        mix = {"agree": mix_agree, "compared": len(samples), "season_orders": suggested,
+               "description": "; ".join(f"{'specials' if s == '0' else 'season ' + s}: {names.get(o or '', o).split(' (')[0]}"
+                                        for s, o in sorted(suggested.items(), key=lambda kv: int(kv[0]))),
+               "current": current == {k: v for k, v in suggested.items()}}
+    elif best_whole:
+        best_whole["best"] = True
+    return {"orders": orders, "mix": mix, "main": whole, "season_orders": current}
+
+
+def set_order(key: str, order, season_orders: dict = None) -> dict:
+    with core.lock:
+        eps, _, _ = find(key)
+        m = eps[0]["match"]
+        if not tvlib.confirmed(m):
+            raise UserError("Match this show on TMDB (and confirm the match) first.")
+        allowed = [o["id"] for o in tvmeta.order_options(m["tmdb_id"])]
+        season_orders = {str(int(s)): (o or None) for s, o in (season_orders or {}).items()}
+        if order not in allowed or any(o not in allowed for o in season_orders.values()):
+            raise UserError("That episode order isn't available for this show.")
+        trial = {**m, "order": order, "season_orders": season_orders}
+        tvmeta.data_for(trial)  # fetch it first, so a failure leaves the show as it was
+        matches = core.load_json(core.TV_MATCHES, {})
+        matches[key]["order"] = order
+        matches[key]["season_orders"] = season_orders
+        core.save_json(core.TV_MATCHES, matches)
+    return detail(key)
 
 
 def file_row(it: dict, root: Path) -> dict:

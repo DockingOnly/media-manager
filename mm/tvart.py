@@ -145,7 +145,7 @@ def run(job: dict, root: Path, kinds: list, replace: bool) -> dict:
         m = eps[0]["match"]
         show_dir = root / eps[0]["show_dir"]
         try:
-            data = tvmeta.show_data(m["tmdb_id"])
+            data = tvmeta.data_for(m)
             for kind in [k for k in kinds if k in SHOW_KINDS]:
                 old = show_existing(show_dir, kind)
                 if old and not replace:
@@ -187,11 +187,11 @@ def run(job: dict, root: Path, kinds: list, replace: bool) -> dict:
                         res["numbering"] += 1
                         continue
                     ep = tvmeta.episode(data, it["season"], it["episodes"][0])
-                    if not ep or not ep.get("still_path"):
+                    if not ep or not (ep.get("still_url") or ep.get("still_path")):
                         res["none"] += 1
                         continue
                     core.set_detail(job, f"{m['name']}: {tvlib.episode_code(it['season'], it['episodes'])} thumbnail")
-                    save_to(dst, image_url(ep["still_path"], "w780"))
+                    save_to(dst, ep.get("still_url") or image_url(ep["still_path"], "w780"))
                     res["downloaded"] += 1
                     res["by_kind"]["thumb"] += 1
         except (UserError, core.TmdbError) as err:
