@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 from flask import Flask, Response, jsonify, request
 
-from . import artwork, bulk, collections, core, export, leftovers, library, movie, nfo, renamer, subtitles, tmdbapi, trailers, trakt
+from . import artwork, bulk, collections, core, dupes, export, leftovers, library, movie, nfo, renamer, subtitles, tmdbapi, trailers, trakt
 from .core import UserError
 
 app = Flask(__name__, static_folder=str(core.BASE / "static"), static_url_path="")
@@ -186,6 +186,19 @@ def api_leftovers_recycle():
     root = leftover_root(d.get("kind", "movies"))
     with core.lock:
         return jsonify(leftovers.recycle(root, [str(p) for p in d.get("paths") or []]))
+
+
+@app.post("/api/dupes")
+def api_dupes():
+    kind = "tv" if body().get("kind") == "tv" else "movies"
+    leftover_root(kind)  # a scan is needed first
+    return job_response("dupes", "Looking for duplicates", 0, lambda job: dupes.find(job, kind))
+
+
+@app.post("/api/dupes/recycle")
+def api_dupes_recycle():
+    d = body()
+    return jsonify(dupes.recycle("tv" if d.get("kind") == "tv" else "movies", [str(x) for x in d.get("ids") or []]))
 
 
 @app.post("/api/folders/forget")

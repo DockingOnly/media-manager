@@ -255,6 +255,7 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
   <button class="ghost" id="artBtn">Download artwork…</button>
   <button class="ghost" id="collBtn">Collections…</button>
   <button class="ghost" id="leftBtn">Tidy leftovers…</button>
+  <button class="ghost" id="dupBtn">Find duplicates…</button>
   <button id="bulkBtn" hidden>Edit selected…</button>
   <button class="ghost" id="traktBtn" hidden>Sync watched from Trakt…</button>
   <span class="export-wrap"><select id="exportKind" aria-label="What to export">
@@ -385,6 +386,13 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
   <div class="foot"><button class="ghost" id="bClose">Cancel</button><button id="bGo">Apply</button></div>
 </div></dialog>
 
+<dialog id="dupDlg" class="wide" aria-labelledby="dTitle"><div class="dlg">
+  <div class="head"><h2 id="dTitle">Duplicates</h2><div class="note" id="dSum"></div></div>
+  <div class="body" id="dList"></div>
+  <div class="foot"><span class="grow note">Ticked copies go to the Recycle Bin with their own subtitles, .nfo and artwork. The weaker copies are ticked only when it's clearly safe; one copy of everything is always kept.</span>
+    <button class="ghost" id="dClose">Close</button><button id="dGo">Send ticked to Recycle Bin</button></div>
+</div></dialog>
+
 <dialog id="leftDlg" class="wide" aria-labelledby="lTitle"><div class="dlg">
   <div class="head"><h2 id="lTitle">Leftovers</h2><div class="note" id="lSum"></div>
     <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="lAll" checked> Select all</label></div>
@@ -493,7 +501,7 @@ async function api(url,data,method){
 function busy(btn,text){const old=btn.textContent;btn.disabled=true;btn.textContent=text;return()=>{btn.disabled=false;btn.textContent=old}}
 /* ---------- progress ---------- */
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const JOB_BUTTONS=["#scan","#matchAll","#renameBtn","#nfoBtn","#artBtn","#collBtn","#bulkBtn","#traktBtn","#trBtn","#subBtn"];
+const JOB_BUTTONS=["#scan","#matchAll","#renameBtn","#nfoBtn","#artBtn","#collBtn","#dupBtn","#bulkBtn","#traktBtn","#trBtn","#subBtn"];
 let jobId=null;
 function prog(cls){const p=$("#prog");p.hidden=false;p.className="prog"+(cls?" "+cls:"")}
 function status(t,err){  // a message with no bar
@@ -1147,6 +1155,54 @@ $("#lGo").onclick=async()=>{
     finish(msg,!!d.failed.length)}
   catch(e){$("#lSum").textContent=e.message;finish(e.message,true)}
   finally{$("#lGo").disabled=false}
+};
+
+/* ---------- duplicates ---------- */
+let dups=null;
+const dur=s=>s?`${Math.floor(s/3600)?Math.floor(s/3600)+" h ":""}${Math.round(s%3600/60)} min`:"length unknown";
+function renderDups(note){
+  const g=dups.groups;
+  $("#dSum").textContent=note||(g.length?`${plural(g.length,dups.kind==="tv"?"episode":"movie")} with more than one copy.`:"");
+  $("#dList").innerHTML=g.map((x,gi)=>`<section style="padding:10px 0;border-bottom:1px solid var(--line)">
+    <h3 style="margin:0 0 4px;font-size:15px">${esc(x.title)}</h3>${x.note?`<div class="note" style="margin-bottom:6px">⚠ ${esc(x.note)}</div>`:""}
+    ${x.copies.map(c=>`<label style="display:flex;gap:10px;align-items:flex-start;padding:4px 0">
+      <input type="checkbox" data-dup="${esc(c.id)}" data-g="${gi}" ${c.suggest?"checked":""}>
+      <span><strong>${esc([c.resolution||"?",c.hdr,c.codec].filter(Boolean).join(" "))}</strong> · ${size(c.size)} · ${esc(dur(c.duration))}${c.audio?` · ${esc(c.audio)}`:""}${c.parts?` · ${c.parts} parts`:""}${c.episodes&&x.copies.some(o=>o.episodes!==c.episodes)?` · ${esc(c.episodes)}`:""}
+        ${c.label?` <span class="tag t">${esc(c.label)}</span>`:""}${c.keep?` <span class="tag r">Best copy</span>`:""}
+        <div class="note" style="word-break:break-all">${c.paths.map(esc).join("<br>")}</div></span></label>`).join("")}</section>`).join("")
+    ||'<p class="note">No duplicates: every movie and episode is here once.</p>';
+  dupCount();
+}
+function dupCount(){
+  const sel=$$("#dList [data-dup]:checked");
+  const bytes=sel.reduce((a,c)=>a+dups.groups[c.dataset.g].copies.find(x=>x.id===c.dataset.dup).size,0);
+  $("#dGo").disabled=!sel.length;
+  $("#dGo").textContent=sel.length?`Send ${sel.length} ${sel.length===1?"copy":"copies"} to Recycle Bin (${size(bytes)})`:"Send ticked to Recycle Bin";
+}
+$("#dList").onchange=e=>{
+  const c=e.target.closest("[data-dup]");if(!c)return;
+  const all=$$(`#dList [data-g="${c.dataset.g}"]`);
+  if(c.checked&&all.every(x=>x.checked)){c.checked=false;$("#dSum").textContent="One copy of each is always kept: untick another copy first."}
+  dupCount();
+};
+$("#dupBtn").onclick=async()=>{
+  try{dups=await runJob("/api/dupes",{kind:mode==="tv"?"tv":"movies"},"Looking for duplicates",true);
+    finish(dups.groups.length?`Found ${plural(dups.groups.length,mode==="tv"?"episode":"movie")} with more than one copy.`:"No duplicates found.");
+    renderDups();$("#dupDlg").showModal()}
+  catch(e){finish(e.message,true)}
+};
+$("#dClose").onclick=()=>$("#dupDlg").close();
+$("#dGo").onclick=async()=>{
+  const ids=$$("#dList [data-dup]:checked").map(c=>c.dataset.dup);
+  if(!ids.length)return;
+  $("#dGo").disabled=true;
+  try{const d=await api("/api/dupes/recycle",{kind:mode==="tv"?"tv":"movies",ids});applyResult(d);
+    const msg=`Sent ${plural(d.recycled.length,"file")} to the Recycle Bin.`+(d.failed.length?` Not sent: ${d.failed.map(f=>`${f.path} (${f.error})`).join("; ")}`:"")+(d.recycled.length?" Tidy leftovers will offer any folder left empty.":"");
+    const gone=new Set(d.recycled.map(p=>p.toLowerCase()));
+    dups.groups=dups.groups.map(g=>({...g,copies:g.copies.filter(c=>!c.paths.every(p=>gone.has(p.toLowerCase())))})).filter(g=>g.copies.length>1);
+    renderDups(msg);finish(msg,!!d.failed.length)}
+  catch(e){$("#dSum").textContent=e.message;finish(e.message,true)}
+  finally{dupCount()}
 };
 
 /* ---------- switching between Movies and TV shows ---------- */
