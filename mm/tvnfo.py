@@ -155,6 +155,9 @@ def write_episode(video: Path, data: dict, season: int, numbers: list, overwrite
                     if el is not None and new.find(tag) is None:
                         new.append(el)
             roots.append(new)
+    from . import mediainfo
+    for r in roots:  # each entry carries the file's technical details, as Kodi and Jellyfin expect
+        mediainfo.add_fileinfo(r, video)
     path.write_bytes(nfo.to_bytes_all(roots))
     return "written"
 

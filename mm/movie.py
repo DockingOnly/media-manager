@@ -97,7 +97,9 @@ def detail(item_id: str) -> dict:
         images.setdefault("poster", info.get("poster_url") or (it.get("match") or {}).get("poster"))
         if info.get("fanart_url"):
             images.setdefault("fanart", info["fanart_url"])
-    return {"item": dict(it), "info": info, "source": source, "nfo": core.rel(path, video.parent) if path else None,
+    from . import mediainfo
+    tech = mediainfo.summary(mediainfo.probe(video))
+    return {"item": dict(it), "info": info, "source": source, "tech": tech, "nfo": core.rel(path, video.parent) if path else None,
             "edits": nfo.load_edits(tmdb_id) if tmdb_id else {}, "editable": bool(tmdb_id),
             "files": movie_files(it, folders, root), "images": images, "artwork": art,
             "folder": core.rel(video.parent, root), "own": own}
@@ -187,7 +189,7 @@ def edit(item_id: str, fields: dict, reset: bool = False) -> dict:
                 if fresh is None:
                     d = tmdbapi.tmdb(f"/movie/{tmdb_id}", append_to_response="credits,release_dates,external_ids,videos")
                     fresh = nfo.build_nfo(d)
-                nfo.write_nfo(path, fresh, tmdb_id, overwrite=True)
+                nfo.write_nfo(path, fresh, tmdb_id, overwrite=True, video=video)
                 if reset:
                     root_el = nfo.parse_xml(path.read_bytes())
                     for el in root_el.findall("lockdata"):

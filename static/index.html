@@ -755,7 +755,8 @@ function viewFrom(d){
       +row("Director",esc((i.directors||[]).join(", ")))+row("Studio",esc((i.studios||[]).join(", ")))
       +row("Collection",esc(i.set),"set")
       +row("Links",[i.tmdb_id&&`<a href="https://www.themoviedb.org/movie/${i.tmdb_id}" target="_blank" rel="noopener">TMDB</a>`,i.imdb_id&&`<a href="https://www.imdb.com/title/${esc(i.imdb_id)}/" target="_blank" rel="noopener">IMDb</a>`].filter(Boolean).join(" · "))
-      +row("Watched",i.watched?"Yes":"");
+      +row("Watched",i.watched?"Yes":"")
+      +row("Video",esc((d.tech||{}).video))+row("Audio",esc((d.tech||{}).audio))+row("Built-in subtitles",esc((d.tech||{}).subtitles))+row("Length",esc((d.tech||{}).duration));
     h+=`</dl>`;
     if((i.cast||[]).length)h+=`<h3 style="font-size:1rem;margin:10px 0 4px">Cast</h3><ul class="cast">${i.cast.map(a=>`<li>${a.thumb?`<img src="${esc(a.thumb)}" alt="" loading="lazy">`:`<span class="ph"></span>`}<span>${esc(a.name)}<small>${esc(a.role)}</small></span></li>`).join("")}</ul>`;
     h+=`<p class="note">Details from ${d.source==="nfo"?`the .nfo file (${esc(d.nfo)})${i.by_tmm?", written by tinyMediaManager":""}`:"TMDB (there's no .nfo file yet)"}${i.locked?". Jellyfin won't overwrite them":""}.</p>`;

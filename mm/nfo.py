@@ -230,8 +230,9 @@ def load_edits(tmdb_id) -> dict:
     return core.load_json(core.EDITS, {}).get(str(tmdb_id), {})
 
 
-def write_nfo(path: Path, fresh_xml, tmdb_id, overwrite: bool) -> bool:
-    """Create or update one .nfo. Returns False when it exists and overwrite is off."""
+def write_nfo(path: Path, fresh_xml, tmdb_id, overwrite: bool, video: Path = None) -> bool:
+    """Create or update one .nfo, with the video's technical details. Returns False when it exists and
+    overwrite is off."""
     edits = load_edits(tmdb_id)
     existing = parse_xml(path.read_bytes()) if path.exists() else None
     if existing is not None and not overwrite:
@@ -242,6 +243,9 @@ def write_nfo(path: Path, fresh_xml, tmdb_id, overwrite: bool) -> bool:
     else:
         root = parse_xml(fresh_xml)
     apply_edits(root, edits)
+    if video is not None:
+        from . import mediainfo
+        mediainfo.add_fileinfo(root, video)
     path.write_bytes(to_bytes(root))
     return True
 
@@ -251,7 +255,8 @@ def write_movie_files(tmdb_id, group: list, folders: dict, root: Path, overwrite
     d = tmdbapi.tmdb(f"/movie/{tmdb_id}", append_to_response="credits,release_dates,external_ids,videos")
     xml = build_nfo(d)
     for it in group:
-        if write_nfo(Path(root, it["path"]).with_suffix(".nfo"), xml, tmdb_id, overwrite):
+        video = Path(root, it["path"])
+        if write_nfo(video.with_suffix(".nfo"), xml, tmdb_id, overwrite, video):
             result["nfo"] += 1
         else:
             result["skipped"] += 1
