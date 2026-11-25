@@ -142,6 +142,7 @@ def check_once(client=None, now: float = None) -> list:
             from . import web
             client = web.app.test_client()
         state["busy"] = True
+        core.automatic.set()
         try:
             r = handle(kind, folder, s["steps"], client)
             r["gone"] = seen["gone"]
@@ -150,6 +151,7 @@ def check_once(client=None, now: float = None) -> list:
         except core.UserError as err:  # e.g. you started something meanwhile: try again next time
             state["error"] = str(err)
         finally:
+            core.automatic.clear()
             state["busy"] = False
     state["waiting"] = waiting
     return results

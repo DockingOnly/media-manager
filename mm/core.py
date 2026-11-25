@@ -230,11 +230,15 @@ def note(do: str, **data) -> None:
         a["items"].append({"do": do, **{k: str(v) for k, v in data.items()}})
 
 
+automatic = threading.Event()  # set while the folder watcher is working, so its History entries say so
+
+
 def begin_activity(kind: str, title: str, library: str = "") -> bool:
     """Start collecting changes for one history entry (on this thread). False when one is already open."""
     if getattr(_act, "cur", None) is not None:
         return False
-    _act.cur = {"time": time.time(), "kind": kind, "title": title, "library": library, "items": []}
+    _act.cur = {"time": time.time(), "kind": kind, "title": title, "library": library, "items": [],
+                **({"by": "watch"} if automatic.is_set() else {})}
     return True
 
 

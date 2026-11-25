@@ -113,5 +113,15 @@ p1 = c.get("/api/history").get_json()
 p2 = c.get(f"/api/history?before={p1['entries'][-1]['id']}").get_json()
 ok(len(p1["entries"]) == 100 and p1["more"] and p1["entries"][0]["title"] == "Test 104" and p2["entries"][0]["title"] == "Test 4",
    "newest first, 100 at a time")
+
+# Show in Explorer only inside your libraries; the folder watcher's work is marked
+r = c.post("/api/history/reveal", json={"path": str(S / "elsewhere" / "x.txt")})
+ok(r.status_code == 400 and "outside your library" in r.get_json()["error"], "Show in Explorer refuses paths outside your libraries")
+core.automatic.set()
+core.begin_activity("x", "Watcher test")
+core.changed(lib / "w.nfo")
+core.end_activity()
+core.automatic.clear()
+ok(c.get("/api/history").get_json()["entries"][0].get("by") == "watch", "entries made while watching are marked Automatic")
 shutil.rmtree(S, ignore_errors=True)
 print("done")

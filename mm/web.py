@@ -70,6 +70,12 @@ def api_history_move_back():
     return jsonify(history.move_back(str(body().get("id") or "")))
 
 
+@app.post("/api/history/reveal")
+def api_history_reveal():
+    history.reveal(str(body().get("path") or ""))
+    return jsonify(ok=True)
+
+
 @app.post("/api/history/restore")
 def api_history_restore():
     d = body()

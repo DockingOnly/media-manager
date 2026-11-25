@@ -28,7 +28,7 @@ PATH_TITLES = {"/api/delete": "Deleted a movie", "/api/tv/delete": "Deleted from
                "/api/leftovers/recycle": "Tidied leftovers", "/api/rename/undo": "Undid a movie rename",
                "/api/tv/rename/undo": "Undid a TV rename", "/api/movie/edit": "Edited a movie", "/api/tv/edit": "Edited a show",
                "/api/artwork/set": "Changed a movie's artwork", "/api/tv/artwork/set": "Changed a show's artwork",
-               "/api/history/move-back": "Moved back", "/api/history/restore": "Restored from the Recycle Bin",
+               "/api/history/move-back": "Moved back", "/api/history/reveal": "", "/api/history/restore": "Restored from the Recycle Bin",
                "/api/match": "Matched a movie", "/api/tv/match": "Matched a show"}
 
 
@@ -79,6 +79,31 @@ def _find(log: list, entry_id: str) -> dict:
     if not e:
         raise UserError("That history entry is no longer there.")
     return e
+
+
+def library_folders() -> list:
+    cfg = core.load_config()
+    out = []
+    for many, one in (("folders", "folder"), ("tv_folders", "tv_folder")):
+        out += cfg.get(many) or ([cfg[one]] if cfg.get(one) else [])
+    return out
+
+
+def reveal(path: str) -> None:
+    """Open Explorer at a file (selected), or at the nearest folder that still exists. Only inside your libraries."""
+    import subprocess
+    p = Path(path)
+    if not any(core.key_of(p) == core.key_of(f) or core.key_of(p).startswith(core.key_of(f).rstrip("\\/") + os.sep)
+               for f in library_folders()):
+        raise UserError("That's outside your library folders.")
+    if os.name != "nt":
+        raise UserError("Opening folders only works on Windows.")
+    if p.exists():
+        subprocess.Popen(["explorer", "/select,", str(p)])
+        return
+    while not p.exists() and p.parent != p:
+        p = p.parent
+    os.startfile(str(p))
 
 
 def _refresh() -> None:
