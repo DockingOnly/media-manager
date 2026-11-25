@@ -318,7 +318,7 @@ def annotate(items: list, root: Path) -> list:
 
 def summaries(items: list, root: Path) -> list:
     """One row per show for the library table."""
-    from . import artwork, tvmeta
+    from . import artwork, details, tvmeta
     out = []
     for key, eps in group(items).items():
         m = eps[0].get("match")
@@ -329,6 +329,7 @@ def summaries(items: list, root: Path) -> list:
         title, year = show_title_year(show_dir.name) if show_dir else (eps[0]["series"], None)
         data = tvmeta.cached_for(m) if confirmed(m) else None
         missing = tvmeta.missing_episodes(data, have) if data else None
+        techs = [(e, details.tech(root / e["path"])) for e in episodes]  # from what ffmpeg already said
         subs = {}
         for e in episodes:
             for lang in set(e["files"]["subs"]) | set(e["files"].get("subs_in") or []):
@@ -346,7 +347,19 @@ def summaries(items: list, root: Path) -> list:
                     "trailer": "trailers" in names or any(n.endswith(tuple(f"-trailer{x}" for x in core.VIDEO_EXTS)) for n in names),
                     "thumbs": sum(e["files"]["thumb"] for e in episodes), "subs": subs},
             "season_guessed": any(e.get("season_guessed") for e in episodes),
+            "added": max((e.get("mtime") or 0 for e in eps), default=0) or None,
+            "res_counts": _counts(t.get("resolution") or e.get("resolution") for e, t in techs),
+            "codec_counts": _counts(t.get("codec") or e.get("codec") for e, t in techs),
+            "runtime": sum(t.get("runtime") or 0 for _, t in techs) or None,
+            "info": details.from_nfo(show_dir / "tvshow.nfo", "tvshow") if show_dir and "tvshow.nfo" in names else {},
         })
+    return out
+
+
+def _counts(values) -> dict:
+    out = {}
+    for v in values:
+        out[v or "?"] = out.get(v or "?", 0) + 1
     return out
 
 

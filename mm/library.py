@@ -5,7 +5,7 @@ from pathlib import Path
 
 from guessit import guessit
 
-from . import core, mediainfo
+from . import core, details, mediainfo
 from .core import key_of, norm_title
 
 SKIP_FILE = re.compile(r"(^|[\s._-])(sample|trailer)([\s._-]|$)", re.I)
@@ -324,6 +324,8 @@ def annotate(items: list, root: Path) -> list:
             "subs": sub_languages(names, stem),
             "subs_in": mediainfo.embedded_subs(video),  # tracks inside the video (only if it's been read already)
         }
+        nfo_file = folder / f"{video.stem}.nfo" if f"{stem}.nfo" in names else (folder / "movie.nfo" if own and "movie.nfo" in names else None)
+        it["info"] = details.for_movie(video, nfo_file)  # runtime, HDR, audio, rating, genres... for the table
         m = it.get("match") or {}
         it["named"] = False
         if m.get("status") in core.MATCHED:

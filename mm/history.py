@@ -51,6 +51,12 @@ def add(entry: dict) -> None:
         log = _load()
         entry = {"id": f"h{time.time_ns()}", **entry}
         log.append(entry)
+        import logging
+        counts = {}
+        for it in entry.get("items") or []:
+            counts[it.get("do")] = counts.get(it.get("do"), 0) + 1
+        logging.getLogger("mm").info("%s%s: %s", entry.get("title") or "Changed files", " (automatic)" if entry.get("by") == "watch" else "",
+                                     ", ".join(f"{n} {k}" for k, n in counts.items()) or "nothing")
         core.save_json(core.HISTORY, log[-KEEP:])
 
 

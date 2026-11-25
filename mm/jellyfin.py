@@ -117,6 +117,29 @@ def check(url: str = None, key: str = None, map_text: str = None) -> dict:
             "libraries": libs, "warnings": warnings}
 
 
+# ---------------------------------------------------------------- finding a movie or show in Jellyfin
+
+def find_item(path: str, title: str, kind: str = "Movie") -> dict:
+    """Jellyfin's page for a movie file or a show folder: {'url', 'name'}. Found by path, so the right copy opens."""
+    users = request("GET", "/Users") or []
+    user = next((u for u in users if (u.get("Policy") or {}).get("IsAdministrator")), users[0] if users else None)
+    if not user:
+        raise UserError("Jellyfin has no users to look this up with.")
+    q = urllib.parse.urlencode({"Recursive": "true", "IncludeItemTypes": kind, "Fields": "Path", "Limit": 50,
+                                "SearchTerm": (title or "")[:60]})
+    found = (request("GET", f"/Users/{user['Id']}/Items?{q}") or {}).get("Items") or []
+    want = to_jellyfin(path)
+    norm = lambda x: (x or "").replace("\\", "/").rstrip("/").lower()
+    item = next((i for i in found if norm(i.get("Path")) == norm(want)), None)
+    if item is None and kind == "Series":
+        item = next((i for i in found if _inside(want, i.get("Path") or "") or _inside(i.get("Path") or "", want)), None)
+    if item is None:
+        raise UserError("Jellyfin doesn't have this yet (or knows it under another name). If it's new, give Jellyfin a minute to scan it.")
+    base = settings()["url"]
+    return {"url": f"{base}/web/#/details?id={item['Id']}" + (f"&serverId={item['ServerId']}" if item.get("ServerId") else ""),
+            "name": item.get("Name") or title}
+
+
 # ---------------------------------------------------------------- telling Jellyfin
 
 def folders_for(paths) -> list:

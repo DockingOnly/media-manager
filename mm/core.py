@@ -21,6 +21,7 @@ TV_CACHE = BASE / "tv_cache.json"      # TMDB show and episode details, refreshe
 TV_RENAME_LOG = BASE / "tv_rename_log.json"
 HISTORY = BASE / "history.json"       # what the app changed, newest last (the History window)
 PROBES = BASE / "probe_cache.json"      # what ffmpeg said about each video (so it's read once, not every time)
+BACKUPS = BASE / "backups"              # daily copies of your matches, edits and settings (backup.py)
 PORT = 8765
 USER_AGENT = "media-manager/0.8"
 
@@ -123,15 +124,22 @@ def save_json(path: Path, data) -> None:
 
 
 def load_config() -> dict:
-    return load_json(CONFIG, {})
+    """Your settings: config.json, plus the API keys kept in Windows Credential Manager (see vault.py)."""
+    from . import vault
+    return vault.merge_into(load_json(CONFIG, {}))
 
 
 def save_config(**changes) -> dict:
+    """Change some settings. API keys and passwords go to Credential Manager, not config.json, when it can be used
+    (saving with no changes moves any keys still in config.json there)."""
+    from . import vault
     with lock:
-        cfg = load_config()
+        cfg = load_json(CONFIG, {})
         cfg.update(changes)
-        save_json(CONFIG, cfg)
-        return cfg
+        moved = vault.take_from(cfg)
+        if changes or moved:
+            save_json(CONFIG, cfg)
+        return vault.merge_into(cfg)
 
 
 # ---------------------------------------------------------------- names and paths
@@ -469,6 +477,9 @@ def start_job(kind: str, label: str, total: int, work) -> str:
         finally:
             if collecting:
                 end_activity()
+            if job["error"]:
+                import logging
+                logging.getLogger("mm").warning("%s failed: %s", label, job["error"])
             job["finished"] = True
 
     threading.Thread(target=runner, daemon=True).start()
