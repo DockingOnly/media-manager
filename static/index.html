@@ -172,6 +172,39 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 .colls img,.colls .ph{width:70px;height:105px;object-fit:cover;border-radius:4px;background:var(--track);flex:none}
 .colls .films{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px;font-size:.9em}
 .colls .films button{background:none;border:0;padding:0;color:var(--ready);font-weight:400;text-decoration:underline}
+.menu-list label{display:flex;gap:8px;align-items:center;padding:3px 8px;font-weight:400;cursor:pointer}
+.menu-list label:has(input:disabled){cursor:default;color:var(--muted)}
+#colsList{min-width:210px;left:auto;right:0}
+.qhelp{left:auto!important;right:0;min-width:min(620px,92vw);max-height:65vh;overflow:auto;padding:12px 14px!important;display:block!important;font-size:.92em}
+.qhelp p{margin:0 0 8px}
+.qhelp table{width:100%}.qhelp td{padding:3px 8px;white-space:normal;vertical-align:top}
+.qhelp code,.keys kbd{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:0 5px;font:inherit;font-size:.92em}
+.qhelp button.ex{display:inline;background:none;border:0;padding:0 2px;color:var(--accent);font-weight:400;font-family:inherit}
+#qHint{margin:-4px 0 10px;font-size:.9em}
+tr.cur td{background:var(--hover)}
+tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+.ctx{position:fixed;z-index:50;min-width:230px;padding:6px;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:1px}
+.ctx button{background:none;border:1px solid transparent;color:var(--ink);font-weight:400;text-align:left;padding:5px 10px;display:flex;justify-content:space-between;gap:20px}
+.ctx button:hover,.ctx button:focus-visible{background:var(--hover);border-color:var(--line);outline:none}
+.ctx button.danger{color:var(--danger)}
+.ctx kbd{color:var(--muted);font:inherit;font-size:.85em}
+.ctx hr{border:0;border-top:1px solid var(--line);margin:4px 2px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:0 0 18px}
+.tile{border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.tile b{display:block;font-size:1.35rem;font-weight:650;font-variant-numeric:tabular-nums}.tile span{color:var(--muted);font-size:.88em}
+.stgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:4px 32px}
+.stgrid h3{font-size:.98rem;margin:6px 0 8px}
+.bars{display:grid;grid-template-columns:minmax(80px,max-content) 1fr max-content;gap:5px 10px;align-items:center;margin:0 0 16px;font-size:.92em}
+.bars .lbl{background:none;border:0;padding:0;color:var(--ink);font-weight:400;text-align:left;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:inherit}
+.bars button.lbl:hover{color:var(--accent);text-decoration:underline}
+.bars .b{height:10px;display:flex;align-items:center}
+.bars .b span{display:block;height:10px;background:var(--accent);border-radius:0 4px 4px 0;min-width:2px}
+.bars .v{color:var(--muted);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.win{border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin:0 0 16px}
+.win p{margin:0 0 6px}
+.bk td{white-space:normal}
+.keys{display:grid;grid-template-columns:max-content 1fr;gap:6px 16px;margin:0}
+.keys dt{white-space:nowrap}.keys dd{margin:0;color:var(--muted)}
 .colls .miss{color:var(--todo)}.colls .soon{color:var(--muted)}.orders ul{list-style:none;margin:6px 0 0;padding:0}
 </style>
 </head>
@@ -249,6 +282,7 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
     <label><input type="checkbox" name="wstep" value="trailers"> Download trailers</label>
   </div>
   <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="wKeep"> Keep watching after I close this page (the app's black window stays open; close it to stop)</label>
+  <div style="display:flex;gap:10px;align-items:center;margin-top:8px"><label style="display:flex;gap:8px;align-items:center;font-weight:400;margin:0"><input type="checkbox" id="wNotify" checked> Show a Windows notification when new files have been handled</label> <button class="ghost small" id="wNotifyTest" type="button">Test</button></div>
   <p class="note">Each step only fills in what's missing, so nothing you already have changes. Renaming and moving always wait for you: you'll see what arrived and what needs renaming. To watch without opening the app, run <code>.venv\Scripts\python app.py watch</code> (for example from Task Scheduler at log-on). <button class="ghost small" id="wNow" type="button">Look now</button></p>
   <p id="wMsg" class="note" role="status"></p>
   <h2 style="margin-top:18px">Rename patterns</h2>
@@ -266,7 +300,8 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
   </div>
   <p class="note">Posters, backdrops and logos come from TMDB and need nothing more. A free fanart.tv key adds banners, clear art, disc art and landscape thumbnails, and more choices for the rest. Create an account at fanart.tv, then get a personal API key from your profile.</p>
   <div class="row"><button id="saveSet">Save settings</button></div>
-  <p id="setMsg" class="note">Your keys and password are stored only in config.json on this computer.</p>
+  <p id="keysWhere" class="note"></p>
+  <p id="setMsg" class="note"></p>
 </section>
 
 <div class="bar">
@@ -300,6 +335,10 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
       <button class="ghost" id="leftBtn" role="menuitem">Tidy leftovers… <small>folders with nothing left to play</small></button>
       <button class="ghost" id="collBtn" role="menuitem">Collections… <small>which films in a series you're missing</small></button>
       <button class="ghost" id="jfCheckBtn" role="menuitem">Check Jellyfin's settings… <small>anything that fights this app's files</small></button>
+      <button class="ghost" id="statsBtn" role="menuitem">Library stats… <small>sizes, formats, and space you could win back</small></button>
+      <button class="ghost" id="bkBtn" role="menuitem">Backups… <small>your matches, edits and settings, day by day</small></button>
+      <button class="ghost" id="keysBtn" role="menuitem">Keyboard shortcuts… <small>or press ?</small></button>
+      <button class="ghost" id="logBtn" role="menuitem">Open the log file <small>for when something went wrong</small></button>
     </div></details>
   <span class="export-wrap"><select id="exportKind" aria-label="What to export">
     <option value="">Export…</option><option value="movies.csv" data-mode="movies">Movies (spreadsheet)</option><option value="movies.html" data-mode="movies">Movies (web page)</option>
@@ -309,7 +348,8 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
   </select></span>
 </div>
 <div class="tools" id="tools" hidden>
-  <input id="filter" placeholder="Filter by title, year or file name" aria-label="Filter movies">
+  <input id="filter" placeholder="Filter by title, year or file name" aria-label="Filter movies" aria-describedby="qHint">
+  <details class="menu" id="qHelp"><summary class="ghost" title="How to filter" aria-label="How to filter">?</summary><div class="menu-list qhelp" id="qHelpBody"></div></details>
   <select id="show" aria-label="Show which">
     <option value="all">All movies</option>
     <option value="todo">Needs renaming</option>
@@ -323,13 +363,47 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
     <option value="no-subs">Missing subtitles</option>
     <option value="dups">More than one copy</option>
   </select>
+  <details class="menu" id="colsMenu"><summary class="ghost" aria-haspopup="true">Columns ▾</summary><div class="menu-list" id="colsList"></div></details>
 </div>
+<div id="qHint" class="note" role="status" hidden></div>
 <div class="wrap">
   <div id="msg" class="msg">Enter the folder that holds your movies, then choose Scan folder. Next time, your library opens automatically.</div>
   <table id="tbl" hidden><thead></thead><tbody></tbody></table>
 </div>
 </main>
 
+<div id="ctx" class="ctx" role="menu" aria-label="Row actions" hidden></div>
+<dialog id="statsDlg" class="wide" aria-labelledby="stTitle"><div class="dlg">
+  <div class="head"><h2 id="stTitle" style="margin:0">Library stats</h2><p class="note" id="stSub" style="margin:4px 0 0">Click a row to show just those in the table.</p></div>
+  <div class="body" id="stBody"></div>
+  <div class="foot"><button class="ghost" id="stClose">Close</button></div>
+</div></dialog>
+<dialog id="bkDlg" class="wide" aria-labelledby="bkTitle"><div class="dlg">
+  <div class="head"><h2 id="bkTitle" style="margin:0">Backups</h2><p class="note" style="margin:4px 0 0">When the app starts, and once a day while it runs, it copies what you can't get back by scanning again: your matches, your metadata edits, rename undo, History and settings. It keeps the newest 10. API keys are never in a backup.</p></div>
+  <div class="body" id="bkBody"></div>
+  <div class="foot"><span class="grow" id="bkMsg" role="status"></span><button class="ghost" id="bkNow">Back up now</button><button class="ghost" id="bkClose">Close</button></div>
+</div></dialog>
+<dialog id="keysDlg" aria-labelledby="kTitle"><div class="dlg">
+  <div class="head"><h2 id="kTitle" style="margin:0">Keyboard shortcuts</h2></div>
+  <div class="body"><dl class="keys">
+    <dt><kbd>/</kbd></dt><dd>Jump to the filter box (<kbd>Esc</kbd> there clears it)</dd>
+    <dt><kbd>J</kbd> <kbd>K</kbd> or <kbd>↓</kbd> <kbd>↑</kbd></dt><dd>Move down and up the list (arrows once a row is highlighted)</dd>
+    <dt><kbd>Shift</kbd> + <kbd>J</kbd> <kbd>K</kbd> <kbd>↓</kbd> <kbd>↑</kbd></dt><dd>Select while moving</dd>
+    <dt><kbd>Home</kbd> <kbd>End</kbd></dt><dd>First and last row</dd>
+    <dt><kbd>Space</kbd> or <kbd>X</kbd></dt><dd>Select or deselect the highlighted row</dd>
+    <dt>Shift-click a checkbox</dt><dd>Select (or deselect) every row from the last one you clicked</dd>
+    <dt><kbd>Ctrl</kbd> + <kbd>A</kbd></dt><dd>Select every row shown</dd>
+    <dt><kbd>Esc</kbd></dt><dd>Clear the selection and the highlight</dd>
+    <dt><kbd>Enter</kbd> or <kbd>O</kbd></dt><dd>Open details</dd>
+    <dt><kbd>M</kbd></dt><dd>Find on TMDB (change the match)</dd>
+    <dt><kbd>P</kbd></dt><dd>Play in your usual video player</dd>
+    <dt><kbd>F</kbd></dt><dd>Open the folder in Explorer</dd>
+    <dt><kbd>Delete</kbd></dt><dd>Delete… (asks first; files go to the Recycle Bin)</dd>
+    <dt>Right-click a row, <kbd>Shift</kbd> + <kbd>F10</kbd></dt><dd>Everything you can do with it</dd>
+    <dt><kbd>?</kbd></dt><dd>This list</dd>
+  </dl></div>
+  <div class="foot"><button class="ghost" id="keysClose">Close</button></div>
+</div></dialog>
 <dialog id="matchDlg" aria-labelledby="mTitle"><div class="dlg">
   <div class="head">
     <h2 id="mTitle">Find on TMDB</h2>
@@ -541,15 +615,82 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 <script>
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
-const MOVIE_COLS=[["sel",""],["del",""],["match","Movie"],["has","Has"],["named","Jellyfin"],["video","Video"],["size","Size","num"],["path","File"]];
-const TV_COLS=[["sel",""],["del",""],["match","Show"],["eps","Episodes"],["has","Has"],["named","Jellyfin"],["size","Size","num"],["folder","Folder"]];
 const MOVIE_FILTERS=[["all","All movies"],["attention","Needs attention"],["todo","Needs renaming"],["ready","Named for Jellyfin"],["matched","Matched on TMDB"],["review","Needs review"],["unmatched","Not matched"],["no-nfo","Missing .nfo"],["no-art","Missing artwork"],["no-trailer","Missing trailer"],["no-subs","Missing subtitles"],["dups","More than one copy"]];
 const TV_FILTERS=[["all","All shows"],["attention","Needs attention"],["missing","Missing episodes"],["todo","Needs renaming"],["ready","Named for Jellyfin"],["matched","Matched on TMDB"],["review","Needs review"],["unmatched","Not matched"],["no-nfo","Missing .nfo files"],["no-art","Missing artwork"],["no-trailer","Missing trailer"],["no-subs","Missing subtitles"]];
 const ART_KINDS={movies:[["poster","Poster"],["fanart","Backdrop"],["logo","Logo"],["landscape","Thumbnail"],["banner","Banner"],["clearart","Clear art"],["disc","Disc art"]],
   tv:[["poster","Poster"],["fanart","Backdrop"],["logo","Logo"],["landscape","Thumbnail"],["banner","Banner"],["clearart","Clear art"],["season","Season posters"],["thumb","Episode thumbnails"]]};
 let mode=localStorage.getItem("mm-mode")==="tv"?"tv":"movies";
-let COLS=mode==="tv"?TV_COLS:MOVIE_COLS;
+let COLS=[];
 let rows=[],key="match",dir=1,current=null;
+/* ---------- columns: every column the table can show; Columns ▾ picks which (remembered per library) ---------- */
+const I=r=>r.info||{};
+const yearOf=r=>(r.match&&r.match.year)||r.year||null;
+const fmtDate=t=>t?new Date(t*1000).toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"}):"";
+const fmtLen=m=>!m?"":m>=600?`${Math.round(m/60).toLocaleString()} h`:`${Math.floor(m/60)} h ${m%60} min`;
+const topOf=o=>Object.entries(o||{}).filter(([k])=>k!=="?").sort((a,b)=>b[1]-a[1]).map(([k])=>k);
+const namedCell=r=>`<span class="tag ${r.named?"r":"t"}">${r.named?"Named":mode==="tv"?plural(r.to_rename,"file")+" to rename":"Needs renaming"}</span>`;
+function epsCell(r){
+  const seasons=r.seasons.filter(s=>s>0).length;
+  return `${plural(r.episodes,"episode")} · ${plural(seasons,"season")}${r.seasons.includes(0)?" + specials":""}`+
+    (r.missing?` <span class="tag t" title="Aired episodes with no file">${r.missing} missing</span>`:r.missing===0?` <span class="tag r">complete</span>`:"")+
+    (r.extras?` <span class="note">· ${plural(r.extras,"extra")}</span>`:"");
+}
+// [key, heading, cell html, sort value, class, always shown]
+const COLDEFS={
+  movies:[
+    ["match","Movie",r=>matchCell(r),r=>(r.match&&r.match.name)||`${r.title} (${r.year||""})`,"",true],
+    ["year","Year",r=>esc(yearOf(r)||""),r=>yearOf(r)||0,"num"],
+    ["has","Has",r=>hasCell(r),r=>hasCount(r)],
+    ["named","Jellyfin",namedCell,r=>r.named?1:0],
+    ["video","Video",r=>esc(videoText(r)),r=>parseInt(r.resolution)||0],
+    ["hdr","HDR",r=>esc(I(r).hdr||""),r=>I(r).hdr||""],
+    ["audio","Audio",r=>esc(I(r).audio||""),r=>I(r).audio||""],
+    ["runtime","Runtime",r=>esc(fmtLen(I(r).runtime)),r=>I(r).runtime||0,"num"],
+    ["rating","Rating",r=>I(r).rating!=null?I(r).rating.toFixed(1):"",r=>I(r).rating??-1,"num"],
+    ["genres","Genres",r=>esc((I(r).genres||[]).slice(0,3).join(", ")),r=>(I(r).genres||[]).join(", ")||"\uffff"],
+    ["set","Collection",r=>esc(I(r).set||""),r=>I(r).set||"\uffff"],
+    ["mpaa","Age rating",r=>esc(I(r).mpaa||""),r=>I(r).mpaa||"\uffff"],
+    ["bitrate","Bitrate",r=>I(r).bitrate?(I(r).bitrate/1000).toFixed(1)+" Mb/s":"",r=>I(r).bitrate||0,"num"],
+    ["added","Added",r=>esc(fmtDate(r.mtime)),r=>r.mtime||0,"num"],
+    ["size","Size",r=>size(r.size),r=>r.size,"num"],
+    ["path","File",r=>`<div>${esc(r.path)}</div>`,r=>r.path,"file"]],
+  tv:[
+    ["match","Show",r=>matchCell(r),r=>(r.match&&r.match.name)||`${r.title} (${r.year||""})`,"",true],
+    ["year","Year",r=>esc(yearOf(r)||""),r=>yearOf(r)||0,"num"],
+    ["eps","Episodes",epsCell,r=>r.episodes],
+    ["has","Has",r=>tvHasCell(r),r=>tvHasCount(r)],
+    ["named","Jellyfin",namedCell,r=>r.named?1:0],
+    ["video","Video",r=>esc([topOf(r.res_counts)[0],topOf(r.codec_counts)[0]].filter(Boolean).join(" · ")),r=>parseInt(topOf(r.res_counts)[0])||0],
+    ["runtime","Running time",r=>esc(fmtLen(r.runtime)),r=>r.runtime||0,"num"],
+    ["rating","Rating",r=>I(r).rating!=null?I(r).rating.toFixed(1):"",r=>I(r).rating??-1,"num"],
+    ["genres","Genres",r=>esc((I(r).genres||[]).slice(0,3).join(", ")),r=>(I(r).genres||[]).join(", ")||"\uffff"],
+    ["mpaa","Age rating",r=>esc(I(r).mpaa||""),r=>I(r).mpaa||"\uffff"],
+    ["added","Last added",r=>esc(fmtDate(r.added)),r=>r.added||0,"num"],
+    ["size","Size",r=>size(r.size),r=>r.size,"num"],
+    ["folder","Folder",r=>`<div>${esc(r.folder)}</div>`,r=>r.folder,"file"]]};
+const DEFAULT_COLS={movies:["match","has","named","video","size","path"],tv:["match","eps","has","named","size","folder"]};
+const colDef=k=>COLDEFS[mode].find(c=>c[0]===k);
+function shownCols(){
+  let v=null;try{v=JSON.parse(localStorage.getItem("mm-cols-"+mode)||"null")}catch{}
+  const all=COLDEFS[mode].map(c=>c[0]);
+  v=Array.isArray(v)?v.filter(k=>all.includes(k)):DEFAULT_COLS[mode];
+  return v.includes("match")?v:["match",...v];
+}
+function setCols(){
+  const on=shownCols();
+  COLS=[["sel",""],["del",""],...COLDEFS[mode].filter(c=>on.includes(c[0])).map(c=>[c[0],c[1],c[4]||""])];
+  if(!COLS.some(c=>c[0]===key)){key="match";dir=1}
+}
+function renderColsMenu(){
+  const on=shownCols();
+  $("#colsList").innerHTML=COLDEFS[mode].map(c=>`<label><input type="checkbox" data-col="${c[0]}"${on.includes(c[0])?" checked":""}${c[5]?" disabled":""}> ${esc(c[1])}</label>`).join("")+
+    `<button class="ghost small" id="colsReset" type="button" style="margin-top:6px">Back to the usual columns</button>`;
+}
+$("#colsList").addEventListener("change",e=>{
+  const on=$$("#colsList input:checked").map(x=>x.dataset.col);
+  localStorage.setItem("mm-cols-"+mode,JSON.stringify(on));setCols();saveView();render();
+});
+$("#colsList").addEventListener("click",e=>{if(e.target.id==="colsReset"){localStorage.removeItem("mm-cols-"+mode);setCols();renderColsMenu();saveView();render()}});
 const ep=p=>mode==="tv"?p.replace(/^\/api\//,"/api/tv/"):p;   // the TV version of an endpoint
 const noun=n=>plural(n,mode==="tv"?"show":"movie");
 function applyResult(d){if(mode==="tv")setShows(d.shows||[]);else setRows(d.items||[])}
@@ -627,7 +768,6 @@ function matchCell(r){
 const allSubs=f=>[...new Set([...(f.subs||[]),...(f.subs_in||[])])].sort();
 const hasCount=r=>{const f=r.files||{};return(f.nfo?1:0)+(f.art?1:0)+(f.trailer?1:0)+(allSubs(f).length?1:0)};
 const videoText=r=>[r.resolution,r.codec,r.source].filter(Boolean).join(" · ");
-const sortVal=(r,k)=>k==="match"?(r.match&&r.match.name)||`${r.title} (${r.year||""})`:k==="video"?parseInt(r.resolution)||0:k==="has"?hasCount(r):k==="named"?(r.named?1:0):r[k];
 let copies={};
 function countCopies(){copies={};rows.forEach(r=>{const id=ok(r.match)&&!r.part?r.match.tmdb_id:null;if(id)copies[id]=(copies[id]||0)+1})}
 function hasCell(r){
@@ -648,18 +788,21 @@ function visible(r,show){
     case"unmatched":return!r.match||r.match.status==="none";default:return true}
 }
 function render(){
-  if(mode==="tv")return renderTv();
-  const q=$("#filter").value.trim().toLowerCase(),show=$("#show").value;
-  const list=rows
-    .filter(r=>visible(r,show)&&(!q||`${r.title} ${r.year||""} ${r.path} ${r.match?.name||""}`.toLowerCase().includes(q)))
-    .sort((a,b)=>{const x=sortVal(a,key)??"",y=sortVal(b,key)??"";
+  const qs=parseQuery($("#filter").value),show=$("#show").value,tv=mode==="tv",vis=tv?tvVisible:visible;
+  showHint(qs);
+  const sv=(colDef(key)||colDef("match"))[3];
+  const list=rows.filter(r=>vis(r,show)&&queryMatch(r,qs))
+    .sort((a,b)=>{const x=sv(a)??"",y=sv(b)??"";
       return dir*(typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y),undefined,{numeric:true}))});
   head();
   shownIds=list.map(r=>r.id);updateSel();
-  $("#tbl tbody").innerHTML=list.map(r=>`<tr>${selCell(r)}<td><button class="delbtn" data-del="${esc(r.id)}" aria-label="Delete ${esc(r.title)}" title="Delete…">${TRASH}</button></td><td>${matchCell(r)}</td><td>${hasCell(r)}</td><td><span class="tag ${r.named?"r":"t"}">${r.named?"Named":"Needs renaming"}</span></td><td>${esc(videoText(r))}</td><td class="num">${size(r.size)}</td><td class="file" title="${esc(r.path)}"><div>${esc(r.path)}</div></td></tr>`).join("");
+  const cols=COLS.slice(2).map(c=>colDef(c[0]));
+  $("#tbl tbody").innerHTML=list.map(r=>`<tr data-id="${esc(r.id)}"${r.id===curId?' class="cur"':""}>${selCell(r)}<td><button class="delbtn" data-del="${esc(r.id)}" aria-label="Delete ${esc(r.title)}" title="${tv?"Delete show…":"Delete…"}">${TRASH}</button></td>${
+    cols.map(c=>`<td${c[4]?` class="${c[4]}"`:""}${c[4]==="file"?` title="${esc(c[3](r))}"`:""}>${c[2](r)}</td>`).join("")}</tr>`).join("");
   $("#tbl").hidden=!list.length;
   $("#msg").hidden=!!list.length;
-  if(!list.length)$("#msg").innerHTML=rows.length?'No movies match this filter. <button class="ghost small" data-showall>Show everything</button>':"No video files found in this folder.";
+  if(!list.length)$("#msg").innerHTML=rows.length?`No ${tv?"shows":"movies"} match this filter. <button class="ghost small" data-showall>Show everything</button>`:tv?"No episodes found in this folder.":"No video files found in this folder.";
+  if(curId&&!shownIds.includes(curId))curId=null;
 }
 const pick=(f,html,n)=>n?`<button class="linkish" data-filter="${f}" title="Show only these">${html}</button>`:html;
 function setFilter(f){$("#show").value=f;$("#filter").value="";saveView();render();$("#tbl").scrollIntoView({block:"start",behavior:"smooth"})}
@@ -744,6 +887,10 @@ function showSettings(c){
   $("#jfMap").value=c.jellyfin_map||"";$("#jfAuto").checked=c.jellyfin_auto!==false;$("#jfRefresh").disabled=!c.has_jellyfin_key;
   const w=c.watch||{};$("#wOn").checked=!!w.on;$("#wMin").value=w.minutes||10;$("#wKeep").checked=!!w.keep_alive;
   $$('input[name="wstep"]').forEach(x=>x.checked=(w.steps||[]).includes(x.value));
+  $("#wNotify").checked=c.watch_notify!==false;
+  jfOn=!!(c.jellyfin_url&&c.has_jellyfin_key);
+  $("#keysWhere").textContent=c.keys_in_vault?"Your API keys and password are kept in Windows Credential Manager, encrypted with your Windows login. They aren't in config.json, so copying that file or a backup doesn't give them away.":
+    "Your keys and password are stored only in config.json on this computer.";
 }
 function jfFields(){return {url:$("#jfUrl").value.trim(),key:$("#jfKey").value.trim(),map:$("#jfMap").value}}
 $("#jfTest").onclick=async()=>{const done=busy($("#jfTest"),"Testing…");
@@ -764,7 +911,7 @@ $("#saveSet").onclick=async()=>{
       os_key:$("#osKey").value,os_user:$("#osUser").value,os_pass:$("#osPass").value,sub_langs:$("#subLangs").value,
       yt_login:$("#ytLogin").value,yt_cookie_file:$("#ytFile").value,fanart_key:$("#fanKey").value,omdb_key:$("#omdbKey").value,trakt_id:$("#trId").value,trakt_secret:$("#trSecret").value,
       jellyfin_url:$("#jfUrl").value.trim(),jellyfin_key:$("#jfKey").value.trim(),jellyfin_map:$("#jfMap").value,jellyfin_auto:$("#jfAuto").checked,
-      watch:{on:$("#wOn").checked,minutes:$("#wMin").value,keep_alive:$("#wKeep").checked,steps:$$('input[name="wstep"]:checked').map(x=>x.value)},
+      watch:{on:$("#wOn").checked,minutes:$("#wMin").value,keep_alive:$("#wKeep").checked,notify:$("#wNotify").checked,steps:$$('input[name="wstep"]:checked').map(x=>x.value)},
       patterns:Object.fromEntries(PAT_NAMES.map(k=>[k,$("#pat_"+k).value]))});showSettings(d);
     const notes=[d.verified&&"TMDB accepted the key.",d.os_info,d.omdb_info,d.fanart_info,d.jellyfin_info,"Settings saved."].filter(Boolean).join(" ");
     $("#setMsg").innerHTML=`<span class="tag r">${esc(notes)}</span>`}
@@ -1151,23 +1298,6 @@ function tvHasCell(r){
   const subTip=subs.length?"Subtitles: "+subs.map(l=>`${l} ${r.has.subs[l]} of ${r.files}`).join(", "):"No subtitles";
   return `<span class="has">${b(r.has.nfo&&full(r.has.ep_nfo),"NFO",`tvshow.nfo ${r.has.nfo?"present":"missing"}; episode .nfo files: ${r.has.ep_nfo} of ${r.files}`)}${b(r.has.art,"ART",r.has.art?"Poster":"Poster missing")}${b(r.has.trailer,"TRL",r.has.trailer?"Trailer":"No trailer")}${b(subs.some(l=>full(r.has.subs[l])),subs.length?esc(subs.slice(0,3).join(" ").toUpperCase()):"SUB",subTip)}</span>`;
 }
-function renderTv(){
-  const q=$("#filter").value.trim().toLowerCase(),f=$("#show").value;
-  const val=(r,k)=>k==="match"?(r.match&&r.match.name)||`${r.title} (${r.year||""})`:k==="eps"?r.episodes:k==="has"?tvHasCount(r):k==="named"?(r.named?1:0):r[k];
-  const list=shows.filter(r=>tvVisible(r,f)&&(!q||`${r.title} ${r.folder} ${r.match?.name||""}`.toLowerCase().includes(q)))
-    .sort((a,b)=>{const x=val(a,key)??"",y=val(b,key)??"";return dir*(typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y),undefined,{numeric:true}))});
-  head();
-  shownIds=list.map(r=>r.id);updateSel();
-  $("#tbl tbody").innerHTML=list.map(r=>{
-    const seasons=r.seasons.filter(s=>s>0).length;
-    const eps=`${plural(r.episodes,"episode")} · ${plural(seasons,"season")}${r.seasons.includes(0)?" + specials":""}`+
-      (r.missing?` <span class="tag t" title="Aired episodes with no file">${r.missing} missing</span>`:r.missing===0?` <span class="tag r">complete</span>`:"")+
-      (r.extras?` <span class="note">· ${plural(r.extras,"extra")}</span>`:"");
-    return `<tr>${selCell(r)}<td><button class="delbtn" data-del="${esc(r.id)}" aria-label="Delete ${esc(r.title)}" title="Delete show…">${TRASH}</button></td><td>${matchCell(r)}</td><td>${eps}</td><td>${tvHasCell(r)}</td>
-      <td><span class="tag ${r.named?"r":"t"}">${r.named?"Named":plural(r.to_rename,"file")+" to rename"}</span></td><td class="num">${size(r.size)}</td><td class="file" title="${esc(r.folder)}"><div>${esc(r.folder)}</div></td></tr>`}).join("");
-  $("#tbl").hidden=!list.length;$("#msg").hidden=!!list.length;
-  if(!list.length)$("#msg").innerHTML=shows.length?'No shows match this filter. <button class="ghost small" data-showall>Show everything</button>':"No episodes found in this folder.";
-}
 function summaryTv(){
   const n=shows.length,good=shows.filter(r=>r.named).length,eps=shows.reduce((a,r)=>a+r.episodes,0);
   const matched=shows.filter(r=>ok(r.match)).length,review=shows.filter(r=>r.match&&r.match.status==="review").length;
@@ -1449,17 +1579,17 @@ $("#dGo").onclick=async()=>{
 
 /* ---------- switching between Movies and TV shows ---------- */
 function applyMode(){
-  COLS=mode==="tv"?TV_COLS:MOVIE_COLS;key="match";dir=1;rows=[];shows=[];
+  key="match";dir=1;rows=[];shows=[];curId=null;setCols();renderColsMenu();renderHelp();
   $("#tabMovies").setAttribute("aria-selected",mode==="movies");$("#tabTv").setAttribute("aria-selected",mode==="tv");
   $("#appTitle").textContent=mode==="tv"?"TV library":"Movie library";document.title=$("#appTitle").textContent;
   $("#folder").value="";$("#folder").placeholder=mode==="tv"?"TV shows folder, for example D:\\Media\\Shows":"Movie folder, for example D:\\Movies";
   $("#folder").setAttribute("aria-label",mode==="tv"?"TV shows folder":"Movie folder");
-  $("#filter").placeholder=mode==="tv"?"Filter by show or folder":"Filter by title, year or file name";
+  $("#filter").placeholder=mode==="tv"?"Filter: words, or fields such as missing:yes res:480 genre:comedy  (? explains)":"Filter: words, or fields such as res:4k codec:h264 year:<2000 size:>20gb  (? explains)";
   $("#show").innerHTML=(mode==="tv"?TV_FILTERS:MOVIE_FILTERS).map(([v,l])=>`<option value="${v}">${l}</option>`).join("");
   $("#summary").hidden=$("#tools").hidden=$("#actions").hidden=true;$("#tbl").hidden=true;$("#msg").hidden=false;
   $("#msg").textContent=mode==="tv"?"Enter the folder that holds your TV shows (one folder per show), then choose Scan folder.":"Enter the folder that holds your movies, then choose Scan folder. Next time, your library opens automatically.";
   $("#prog").hidden=true;$("#collBtn").hidden=mode==="tv";
-  restoreView();
+  restoreView();setCols();
 }
 function switchMode(m){if(m===mode||jobId)return;mode=m;selected.clear();localStorage.setItem("mm-mode",m);applyMode();showFolders();loadLibrary()}
 $("#tabMovies").onclick=()=>switchMode("movies");
@@ -1627,6 +1757,343 @@ async function ping(){
 ping();
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){ping();if(!jobId)document.title=$("#appTitle").textContent}});
 addEventListener("pagehide",()=>navigator.sendBeacon("/api/bye"));
+
+/* ---------- the filter box: words, plus fields such as res:4k codec:hevc year:<2000 size:>20gb sub:none ---------- */
+const nz=s=>String(s??"").toLowerCase().replace(/[^a-z0-9]/g,"");
+const ALIAS={hevc:"h265",x265:"h265",avc:"h264",x264:"h264",xvid:"mpeg4",divx:"mpeg4",dv:"dolbyvision",dovi:"dolbyvision",dts:"dts",ddp:"eac3",dd:"ac3"};
+const RES={"4k":2160,uhd:2160,fhd:1080,hd:720};
+const num=v=>{const n=parseFloat(v);return isNaN(n)?null:n};
+const resNum=v=>RES[String(v).toLowerCase()]??num(v);
+const bytes=v=>{const m=/^([\d.]+)\s*([tgmk])?i?b?$/i.exec(v);return m?parseFloat(m[1])*{t:1e12,g:1e9,m:1e6,k:1e3}[(m[2]||"g").toLowerCase()]:null};
+const minutes=v=>{const m=/^(?:(\d+(?:\.\d+)?)\s*h)?\s*(?:(\d+)\s*m?(?:in)?)?$/i.exec(String(v).trim());return m&&(m[1]||m[2])?parseFloat(m[1]||0)*60+(+m[2]||0):null};
+// t: the kind of value; get: the row's value; op: the comparison when none is typed; h: examples for the help
+const MOVIE_FIELDS={
+  title:{t:"text",get:r=>`${r.title} ${r.match?.name||""}`,h:"title:alien"},
+  year:{t:"num",get:yearOf,h:"year:1984 · year:1990-1999 · year:<2000"},
+  res:{t:"num",get:r=>parseInt(r.resolution)||null,parse:resNum,h:"res:4k · res:>=1080 · res:sd"},
+  codec:{t:"text",get:r=>r.codec,h:"codec:hevc · codec:h264 · codec:av1"},
+  hdr:{t:"text",get:r=>I(r).hdr,h:"hdr:yes · hdr:dv · hdr:hdr10"},
+  audio:{t:"text",get:r=>I(r).audio,h:"audio:atmos · audio:dts · audio:7.1"},
+  lang:{t:"list",eq:true,get:r=>I(r).audio_langs,h:"lang:ja (audio language)"},
+  sub:{t:"list",eq:true,get:r=>allSubs(r.files||{}),h:"sub:none · sub:en"},
+  size:{t:"num",get:r=>r.size,parse:bytes,op:">=",h:"size:>20gb · size:<700mb"},
+  runtime:{t:"num",get:r=>I(r).runtime,parse:minutes,op:">=",h:"runtime:>2h30 · runtime:<90"},
+  rating:{t:"num",get:r=>I(r).rating,op:">=",h:"rating:7.5 (that or higher) · rating:<5"},
+  bitrate:{t:"num",get:r=>I(r).bitrate?I(r).bitrate/1000:null,op:">=",h:"bitrate:<3 (Mb/s)"},
+  genre:{t:"list",get:r=>I(r).genres,h:"genre:horror · -genre:comedy"},
+  set:{t:"text",get:r=>I(r).set,h:'set:"star wars" · set:none'},
+  tag:{t:"list",get:r=>I(r).tags,h:"tag:zombie"},
+  mpaa:{t:"text",eq:true,get:r=>I(r).mpaa,h:"mpaa:r · mpaa:pg-13"},
+  added:{t:"date",get:r=>r.mtime,h:"added:7d (last week) · added:>2025-06 · added:2024"},
+  watched:{t:"bool",get:r=>!!I(r).watched,h:"watched:no"},
+  named:{t:"bool",get:r=>!!r.named,h:"named:no"},
+  matched:{t:"bool",get:r=>ok(r.match),h:"matched:no"},
+  review:{t:"bool",get:r=>r.match?.status==="review",h:"review:yes"},
+  nfo:{t:"bool",get:r=>!!(r.files||{}).nfo,h:"nfo:no"},
+  art:{t:"bool",get:r=>!!(r.files||{}).art,h:"art:no"},
+  trailer:{t:"bool",get:r=>!!(r.files||{}).trailer,h:"trailer:no"},
+  dup:{t:"bool",get:r=>visible(r,"dups"),h:"dup:yes"},
+  path:{t:"text",get:r=>r.path,h:"path:extended"}};
+const TV_FIELDS={
+  title:{t:"text",get:r=>`${r.title} ${r.match?.name||""}`,h:"title:crypt"},
+  year:{t:"num",get:yearOf,h:"year:<2000"},
+  res:{t:"num",get:r=>Object.keys(r.res_counts||{}).map(x=>parseInt(x)).filter(Boolean),parse:resNum,h:"res:480 (any episode) · res:sd"},
+  codec:{t:"list",get:r=>Object.keys(r.codec_counts||{}),h:"codec:h264 (any episode)"},
+  rating:{t:"num",get:r=>I(r).rating,op:">=",h:"rating:8"},
+  genre:{t:"list",get:r=>I(r).genres,h:"genre:animation"},
+  mpaa:{t:"text",eq:true,get:r=>I(r).mpaa,h:"mpaa:tv-ma"},
+  episodes:{t:"num",get:r=>r.episodes,op:">=",h:"episodes:>100"},
+  seasons:{t:"num",get:r=>r.seasons.filter(x=>x>0).length,h:"seasons:1"},
+  missing:{t:"num",get:r=>r.missing,op:">=",h:"missing:yes · missing:>5"},
+  size:{t:"num",get:r=>r.size,parse:bytes,op:">=",h:"size:>50gb"},
+  sub:{t:"list",eq:true,get:r=>subsOf(r),h:"sub:none · sub:en"},
+  added:{t:"date",get:r=>r.added,h:"added:30d (new episodes this month)"},
+  named:{t:"bool",get:r=>!!r.named,h:"named:no"},
+  matched:{t:"bool",get:r=>ok(r.match),h:"matched:no"},
+  nfo:{t:"bool",get:r=>!!(r.has.nfo&&r.has.ep_nfo>=r.files),h:"nfo:no"},
+  art:{t:"bool",get:r=>!!r.has.art,h:"art:no"},
+  trailer:{t:"bool",get:r=>!!r.has.trailer,h:"trailer:no"},
+  path:{t:"text",get:r=>r.folder,h:"path:shows"}};
+const FIELD_ALIAS={resolution:"res",genres:"genre",collection:"set",age:"mpaa",rated:"mpaa",subs:"sub",subtitles:"sub",language:"lang",
+  file:"path",folder:"path",dups:"dup",duplicate:"dup",tags:"tag",eps:"episodes",length:"runtime",video:"codec",channels:"audio"};
+const fieldsNow=()=>mode==="tv"?TV_FIELDS:MOVIE_FIELDS;
+function parseQuery(q){
+  const F=fieldsNow(),out={terms:[],words:[],unknown:[]};
+  for(let tok of q.match(/-?\w+:(?:"[^"]*"?|\S*)|-?"[^"]*"?|\S+/g)||[]){
+    let neg=false;if(tok.length>1&&tok[0]==="-"){neg=true;tok=tok.slice(1)}
+    const m=/^(\w+):(.*)$/.exec(tok);
+    if(m){
+      const name=FIELD_ALIAS[m[1].toLowerCase()]||m[1].toLowerCase();
+      if(F[name]){
+        const om=/^(>=|<=|!=|>|<|=)?(.*)$/.exec(m[2].replace(/^"|"$/g,""));
+        if(om[2]!=="")out.terms.push({f:F[name],neg:om[1]==="!="?!neg:neg,op:om[1]==="!="?"":om[1]||"",v:om[2]});
+        continue;
+      }
+      if(m[2])out.unknown.push(m[1]);
+    }
+    const w=tok.replace(/^"|"$/g,"").toLowerCase();if(w)out.words.push({neg,w});
+  }
+  return out;
+}
+const hay=r=>(mode==="tv"?`${r.title} ${r.folder} ${r.match?.name||""}`:`${r.title} ${r.year||""} ${r.path} ${r.match?.name||""}`).toLowerCase();
+function queryMatch(r,qs){
+  if(qs.words.length){const h=hay(r);if(!qs.words.every(({neg,w})=>h.includes(w)!==neg))return false}
+  return qs.terms.every(t=>termMatch(r,t)!==t.neg);
+}
+function dateMatch(t,op,v){
+  if(!t)return false;
+  const d=/^(\d+)\s*([dwmy])$/i.exec(v);
+  if(d){const cut=Date.now()/1000-(+d[1])*{d:1,w:7,m:30.44,y:365.25}[d[2].toLowerCase()]*86400;return op===">"||op===">="?t<cut:t>=cut}
+  const m=/^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$/.exec(v);if(!m)return false;
+  const y=+m[1],mo=m[2]?+m[2]-1:null,da=m[3]?+m[3]:null;
+  const start=new Date(y,mo??0,da??1)/1000,end=(da?new Date(y,mo,da+1):mo!=null?new Date(y,mo+1,1):new Date(y+1,0,1))/1000;
+  return op===">"?t>=end:op===">="?t>=start:op==="<"?t<start:op==="<="?t<end:t>=start&&t<end;
+}
+function termMatch(r,{f,op,v}){
+  const val=f.get(r),lv=v.toLowerCase();
+  if(f.t==="bool")return["yes","y","true","1","any"].includes(lv)?!!val:["no","n","false","0","none"].includes(lv)?!val:false;
+  if(f.t==="text"||f.t==="list"){
+    const arr=(f.t==="list"?(val||[]):(val?[val]:[])).filter(Boolean);
+    const special=f.eq?{any:1,none:0}:{any:1,yes:1,none:0,no:0};
+    if(lv in special)return special[lv]?arr.length>0:!arr.length;
+    const want=ALIAS[nz(v)]||nz(v);
+    return arr.some(x=>f.eq?nz(x)===want:nz(x).includes(want));
+  }
+  if(f.t==="num"){
+    const xs=(Array.isArray(val)?val:[val]).filter(x=>x!=null&&!isNaN(x));
+    if(lv==="any"||lv==="yes")return xs.some(x=>x>0);
+    if(lv==="none"||lv==="no")return!xs.some(x=>x>0);
+    if(lv==="sd"&&f.parse===resNum&&!op)return xs.some(x=>x<720);
+    const parse=f.parse||num,rg=/^([^-.]+?)(?:-|\.\.)(.+)$/.exec(v);
+    if(rg&&!op){const a=parse(rg[1]),b=parse(rg[2]);if(a!=null&&b!=null)return xs.some(x=>x>=Math.min(a,b)&&x<=Math.max(a,b))}
+    const n=parse(v);if(n==null)return false;
+    const o=op||f.op||"=";
+    return xs.some(x=>o===">"?x>n:o===">="?x>=n:o==="<"?x<n:o==="<="?x<=n:Math.abs(x-n)<1e-9);
+  }
+  if(f.t==="date")return dateMatch(val,op,v);
+  return true;
+}
+function showHint(qs){
+  const h=$("#qHint");
+  if(!qs.unknown.length){h.hidden=true;return}
+  h.hidden=false;
+  h.innerHTML=`${qs.unknown.map(u=>`“${esc(u)}:”`).join(", ")} ${qs.unknown.length===1?"isn't a filter field":"aren't filter fields"}, so ${qs.unknown.length===1?"it's":"they're"} matched as ordinary words. <button class="linkish" type="button" data-qhelp>See the fields</button>`;
+}
+$("#qHint").onclick=e=>{if(e.target.closest("[data-qhelp]")){$("#qHelp").open=true;$("#qHelp summary").focus()}};
+function renderHelp(){
+  const F=fieldsNow();
+  $("#qHelpBody").innerHTML=`<p>Words find ${mode==="tv"?"shows by title or folder":"movies by title, year or file name"}; every word must match. Add fields to narrow it down, as many as you like. Click an example to add it.</p>
+    <p><code>-</code> in front leaves those out (<code>-genre:horror</code>). Quotes keep spaces (<code>set:"star wars"</code>). Numbers take <code>&gt;</code> <code>&lt;</code> <code>&gt;=</code> <code>&lt;=</code> or a range (<code>1990-1999</code>). <code>yes</code> / <code>no</code> / <code>none</code> / <code>any</code> work where they make sense.</p>
+    <table>${Object.entries(F).map(([k,f])=>`<tr><td><code>${k}</code></td><td>${(f.h||"").split(" · ").map(x=>{const ex=x.split(" (")[0];return`<button type="button" class="ex" data-ex="${esc(ex)}">${esc(ex)}</button>${x.length>ex.length?`<span class="note">${esc(x.slice(ex.length))}</span>`:""}`}).join(" · ")}</td></tr>`).join("")}</table>`;
+}
+$("#qHelpBody").onclick=e=>{const b=e.target.closest("[data-ex]");if(!b)return;
+  const f=$("#filter");f.value=(f.value.trim()+" "+b.dataset.ex).trim();$("#qHelp").open=false;saveView();render();f.focus()};
+$("#qHelp").addEventListener("keydown",e=>{if(e.key==="Escape"){$("#qHelp").open=false;$("#qHelp summary").focus()}});
+$("#colsMenu").addEventListener("keydown",e=>{if(e.key==="Escape"){$("#colsMenu").open=false;$("#colsMenu summary").focus()}});
+document.addEventListener("click",e=>{["#qHelp","#colsMenu"].forEach(s=>{if($(s).open&&!e.target.closest(s))$(s).open=false})});
+
+/* ---------- moving through rows with the keyboard; shift-click selects a range ---------- */
+let curId=null,lastSel=null,jfOn=false;
+const rowEl=id=>[...$("#tbl tbody").rows].find(t=>t.dataset.id===id);
+function setCur(id,scroll=true){
+  curId=id;$$("#tbl tbody tr.cur").forEach(t=>t.classList.remove("cur"));
+  const tr=id&&rowEl(id);if(tr){tr.classList.add("cur");if(scroll)tr.scrollIntoView({block:"nearest"})}
+}
+function toggleSel(id,on){
+  on=on??!selected.has(id);on?selected.add(id):selected.delete(id);
+  const b=rowEl(id)?.querySelector(".selbox");if(b)b.checked=on;updateSel();
+}
+$("#tbl").addEventListener("click",e=>{
+  const b=e.target.closest(".selbox");
+  if(b){
+    if(e.shiftKey&&lastSel&&lastSel!==b.dataset.sel){
+      const a=shownIds.indexOf(lastSel),z=shownIds.indexOf(b.dataset.sel);
+      if(a>=0&&z>=0)shownIds.slice(Math.min(a,z),Math.max(a,z)+1).forEach(id=>toggleSel(id,b.checked));
+    }
+    lastSel=b.dataset.sel;
+  }
+  const tr=e.target.closest("tbody tr");if(tr)setCur(tr.dataset.id,false);
+});
+const openRow=id=>mode==="tv"?openShow(id):openDetail(id);
+const deleteRow=id=>mode==="tv"?tvDelete(id,"show"):openDelete(id);
+const kindNow=()=>mode==="tv"?"tv":"movies";
+async function playRow(id){try{const d=await api("/api/play",{id,kind:kindNow()});status(`Playing ${d.name}.`)}catch(e){status(e.message,true)}}
+async function folderRow(id){try{await api(mode==="tv"?"/api/tv/open-folder":"/api/open-folder",mode==="tv"?{key:id}:{id});status("Opened in Explorer.")}catch(e){status(e.message,true)}}
+async function jellyfinRow(id){
+  const w=window.open("about:blank","_blank");
+  try{const d=await api("/api/jellyfin/find",{id,kind:kindNow()});if(w){w.opener=null;w.location=d.url}else location.assign(d.url)}
+  catch(e){if(w)w.close();status(e.message,true)}
+}
+function fullPath(r){return($("#folder").value.replace(/[\\/]+$/,"")+"\\"+(mode==="tv"?r.folder:r.path)).replace(/\//g,"\\")}
+async function copyPath(id){
+  const r=rows.find(x=>x.id===id);if(!r)return;
+  try{await navigator.clipboard.writeText(fullPath(r));status("Copied "+fullPath(r))}catch{status("Couldn't copy to the clipboard.",true)}
+}
+const ROW_KEYS={" ":id=>toggleSel(id),x:id=>toggleSel(id),Enter:openRow,o:openRow,m:id=>openMatch(id),p:playRow,f:folderRow,Delete:deleteRow,ContextMenu:id=>openCtx(id)};
+document.addEventListener("keydown",e=>{
+  if(document.querySelector("dialog[open]")||!$("#ctx").hidden||$("#tbl").hidden)return;
+  if(e.target instanceof Element&&e.target.closest("input,textarea,select,[contenteditable],details[open]"))return;
+  const k=e.key,mod=e.ctrlKey||e.metaKey||e.altKey;
+  if(k==="?"){e.preventDefault();$("#keysDlg").showModal();return}
+  if((e.ctrlKey||e.metaKey)&&!e.altKey&&k.toLowerCase()==="a"){e.preventDefault();shownIds.forEach(id=>selected.add(id));render();return}
+  if(mod)return;
+  if(e.target instanceof Element&&e.target.closest("button,a,summary,th")&&(k===" "||k==="Enter"))return;  // let those do their own thing
+  const i=shownIds.indexOf(curId);
+  const move=d=>{
+    e.preventDefault();if(!shownIds.length)return;
+    const n=Math.max(0,Math.min(shownIds.length-1,i<0?(d>0?0:shownIds.length-1):i+d));
+    if(e.shiftKey){if(curId)toggleSel(curId,true);toggleSel(shownIds[n],true)}
+    setCur(shownIds[n]);
+  };
+  const lk=k.length===1?k.toLowerCase():k;
+  if(lk==="j"||(k==="ArrowDown"&&curId))return move(1);
+  if(lk==="k"||(k==="ArrowUp"&&curId))return move(-1);
+  if(k==="Home"&&curId){e.preventDefault();return setCur(shownIds[0])}
+  if(k==="End"&&curId){e.preventDefault();return setCur(shownIds.at(-1))}
+  if(k==="Escape"&&(selected.size||curId)){selected.clear();setCur(null);render();return}
+  if(!curId)return;
+  if(k==="F10"&&e.shiftKey){e.preventDefault();return openCtx(curId)}
+  const act=ROW_KEYS[lk];if(act){e.preventDefault();act(curId)}
+});
+
+/* ---------- right-click a row: everything you can do with it ---------- */
+function ctxItems(id){
+  const r=rows.find(x=>x.id===id);if(!r)return[];
+  const tv=mode==="tv",sel=selected.has(id);
+  return[["Details",()=>openRow(id),"Enter"],["Find on TMDB…",()=>openMatch(id),"M"],
+    [tv?"Play the first episode":"Play",()=>playRow(id),"P"],["Open folder",()=>folderRow(id),"F"],
+    jfOn&&["Show in Jellyfin",()=>jellyfinRow(id)],
+    [tv?"Copy folder path":"Copy file path",()=>copyPath(id)],"-",
+    [sel?"Deselect":"Select",()=>toggleSel(id),"Space"],
+    sel&&selected.size>1&&[`Edit ${selected.size} selected…`,()=>$("#bulkBtn").click()],"-",
+    [tv?"Delete show…":"Delete…",()=>deleteRow(id),"Del","danger"]].filter(Boolean);
+}
+function openCtx(id,x,y){
+  const items=ctxItems(id);if(!items.length)return;
+  setCur(id,x==null);
+  const m=$("#ctx");m._items=items;
+  m.innerHTML=items.map((it,i)=>it==="-"?"<hr>":`<button role="menuitem" type="button" data-i="${i}" class="${it[3]||""}">${esc(it[0])}${it[2]?`<kbd>${it[2]}</kbd>`:""}</button>`).join("");
+  m.hidden=false;
+  if(x==null){const b=rowEl(id).getBoundingClientRect();x=b.left+40;y=b.bottom}
+  const w=m.offsetWidth,h=m.offsetHeight;
+  m.style.left=Math.max(8,Math.min(x,innerWidth-w-8))+"px";
+  m.style.top=(y+h>innerHeight-8?Math.max(8,y-h):y)+"px";
+  m.querySelector("button").focus();
+}
+function closeCtx(){const m=$("#ctx");if(!m.hidden){m.hidden=true;const b=curId&&rowEl(curId)?.querySelector(".mbtn");if(b&&m.contains(document.activeElement))b.focus()}}
+$("#tbl").addEventListener("contextmenu",e=>{const tr=e.target.closest("tbody tr");if(!tr||e.shiftKey)return;e.preventDefault();openCtx(tr.dataset.id,e.clientX,e.clientY)});
+$("#ctx").onclick=e=>{const b=e.target.closest("button");if(!b)return;const it=$("#ctx")._items[b.dataset.i];closeCtx();it[1]()};
+$("#ctx").onkeydown=e=>{
+  const bs=$$("#ctx button"),i=bs.indexOf(document.activeElement);
+  if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();bs[(i+(e.key==="ArrowDown"?1:-1)+bs.length)%bs.length].focus()}
+  else if(e.key==="Home"||e.key==="End"){e.preventDefault();bs[e.key==="Home"?0:bs.length-1].focus()}
+  else if(e.key==="Escape"||e.key==="Tab"){e.preventDefault();closeCtx()}
+};
+document.addEventListener("mousedown",e=>{if(!e.target.closest("#ctx"))closeCtx()});
+addEventListener("resize",closeCtx);addEventListener("blur",closeCtx);
+document.addEventListener("scroll",e=>{if(!$("#ctx").contains(e.target))closeCtx()},true);
+$("#keysBtn").onclick=()=>{$("#toolsMenu").open=false;$("#keysDlg").showModal()};
+$("#keysClose").onclick=()=>$("#keysDlg").close();
+
+/* ---------- library stats ---------- */
+function bars(list,fmt,q){
+  const max=Math.max(1,...list.map(x=>x[1]));
+  return `<div class="bars">${list.map(([label,v,extra])=>{const filt=q&&q(label);
+    return `${filt?`<button type="button" class="lbl" data-q="${esc(filt)}" title="Show just these">${esc(label)}</button>`:`<span class="lbl" title="${esc(label)}">${esc(label)}</span>`}<div class="b" title="${esc(label)}: ${esc(fmt(v,extra))}"><span style="width:${(v/max*100).toFixed(1)}%"></span></div><span class="v">${esc(fmt(v,extra))}</span>`}).join("")}</div>`;
+}
+function tally(list,keyOf,weight=()=>1){
+  const o={};list.forEach(r=>[].concat(keyOf(r)||"Unknown").forEach(k=>{const w=weight(r,k);o[k]=o[k]||[0,0];o[k][0]+=1;o[k][1]+=w}));
+  return Object.entries(o).sort((a,b)=>b[1][1]-a[1][1]||b[1][0]-a[1][0]);
+}
+const tile=(v,l)=>`<div class="tile"><b>${esc(v)}</b><span>${esc(l)}</span></div>`;
+const OLD_CODEC=c=>!/265|hevc|av1|vp9/i.test(c||"");
+function statsMovies(){
+  const R=rows,total=R.reduce((a,r)=>a+r.size,0),mins=R.reduce((a,r)=>a+(I(r).runtime||0),0);
+  const byId={};R.forEach(r=>{if(ok(r.match)&&!r.part)(byId[r.match.tmdb_id]??=[]).push(r)});
+  const dupes=Object.values(byId).filter(g=>g.length>1),dupSave=dupes.reduce((a,g)=>a+g.reduce((s,r)=>s+r.size,0)-Math.max(...g.map(r=>r.size)),0);
+  const old=R.filter(r=>OLD_CODEC(r.codec)).sort((a,b)=>b.size-a.size),oldSize=old.reduce((a,r)=>a+r.size,0);
+  const label=r=>r.match&&r.match.name||`${r.title}${r.year?` (${r.year})`:""}`;
+  const res=tally(R,r=>r.resolution||"Unknown",r=>r.size).sort((a,b)=>(parseInt(b[0])||0)-(parseInt(a[0])||0));
+  const codecs=tally(R,r=>r.codec||"Unknown",r=>r.size);
+  const audio=tally(R,r=>I(r).audio||"Not read yet").slice(0,8);
+  const hdr=tally(R,r=>I(r).hdr||"SDR");
+  const decades=tally(R,r=>yearOf(r)?Math.floor(yearOf(r)/10)*10+"s":"Unknown").sort((a,b)=>a[0].localeCompare(b[0]));
+  const genres=tally(R,r=>I(r).genres&&I(r).genres.length?I(r).genres:"No genre").slice(0,12);
+  const big=[...R].sort((a,b)=>b.size-a.size).slice(0,10);
+  const cnt=(n,[c,sz])=>`${c} · ${size(sz)}`;
+  return `<div class="tiles">${tile(R.length.toLocaleString(),"movies")}${tile(size(total),"on disk")}${tile(fmtLen(mins).replace(/ \d+ min$/,""),`to watch them all (${(mins/1440).toFixed(1)} days)`)}
+    ${tile(R.length?size(total/R.length):"–","average size")}${tile(dupSave+oldSize>0?size(dupSave+oldSize*.5):"Nothing","you could win back")}</div>
+    <div class="win"><p><strong>Space you could win back</strong></p>
+      <p>${dupes.length?`${plural(dupes.length,"movie")} ${dupes.length===1?"has":"have"} more than one copy; keeping only the biggest of each frees <strong>${size(dupSave)}</strong>. <button type="button" class="linkish" data-q="dup:yes">Show them</button> or use Tools → Find duplicates.`:"No movie has a second copy."}</p>
+      <p>${old.length?`${plural(old.length,"file")} use${old.length===1?"s":""} an older video format (H.264, MPEG-4 and the like), taking ${size(oldSize)}. Converting them to H.265 usually halves that: about <strong>${size(oldSize*.5)}</strong>. <button type="button" class="linkish" data-q="-codec:hevc -codec:av1">Show them</button>`:"Every file already uses an efficient format (H.265 or AV1)."}</p>
+      ${old.length?`<p class="note">Biggest of those: ${old.slice(0,5).map(r=>`${esc(label(r))} (${size(r.size)})`).join(", ")}.</p>`:""}</div>
+    <div class="stgrid">
+      <div><h3>Resolution</h3>${bars(res.map(([k,v])=>[k,v[1],v]),(v,e)=>cnt(0,e),k=>k==="Unknown"?"":`res:${parseInt(k)}`)}</div>
+      <div><h3>Video format</h3>${bars(codecs.map(([k,v])=>[k,v[1],v]),(v,e)=>cnt(0,e),k=>k==="Unknown"?"":`codec:${nz(k)}`)}</div>
+      <div><h3>Audio (best track)</h3>${bars(audio.map(([k,v])=>[k,v[0]]),v=>plural(v,"movie"),k=>k==="Not read yet"?"":`audio:"${k}"`)}</div>
+      <div><h3>HDR</h3>${bars(hdr.map(([k,v])=>[k,v[0]]),v=>plural(v,"movie"),k=>k==="SDR"?"hdr:no":`hdr:${nz(k)}`)}</div>
+      <div><h3>Decade</h3>${bars(decades.map(([k,v])=>[k,v[0]]),v=>plural(v,"movie"),k=>k==="Unknown"?"":`year:${parseInt(k)}-${parseInt(k)+9}`)}</div>
+      <div><h3>Genres</h3>${bars(genres.map(([k,v])=>[k,v[0]]),v=>plural(v,"movie"),k=>k==="No genre"?"genre:none":`genre:"${k}"`)}</div>
+      <div><h3>Biggest files</h3>${bars(big.map(r=>[label(r),r.size]),v=>size(v),k=>`title:"${k.replace(/ \(\d{4}\)$/,"").replace(/"/g,"")}"`)}</div>
+    </div>`;
+}
+function statsTv(){
+  const S=shows,total=S.reduce((a,r)=>a+r.size,0),eps=S.reduce((a,r)=>a+r.episodes,0),mins=S.reduce((a,r)=>a+(r.runtime||0),0);
+  const sum=k=>{const o={};S.forEach(r=>Object.entries(r[k]||{}).forEach(([n,c])=>{o[n]=(o[n]||0)+c}));return Object.entries(o).map(([n,c])=>[n==="?"?"Not read yet":n,c])};
+  const res=sum("res_counts").sort((a,b)=>(parseInt(b[0])||0)-(parseInt(a[0])||0)),codecs=sum("codec_counts").sort((a,b)=>b[1]-a[1]);
+  const oldSave=S.reduce((a,r)=>{const n=Object.entries(r.codec_counts||{}).filter(([c])=>c!=="?"&&OLD_CODEC(c)).reduce((x,[,c])=>x+c,0);return a+(r.files?r.size*n/r.files*.5:0)},0);
+  const big=[...S].sort((a,b)=>b.size-a.size).slice(0,12),genres=tally(S,r=>I(r).genres&&I(r).genres.length?I(r).genres:"No genre").slice(0,12);
+  const missing=S.reduce((a,r)=>a+(r.missing||0),0);
+  return `<div class="tiles">${tile(S.length.toLocaleString(),"shows")}${tile(eps.toLocaleString(),"episodes")}${tile(size(total),"on disk")}
+    ${tile(fmtLen(mins).replace(/ \d+ min$/,""),`to watch them all (${(mins/1440).toFixed(1)} days)`)}${tile(missing.toLocaleString(),"aired episodes missing")}</div>
+    <div class="win"><p><strong>Space you could win back</strong></p><p>${oldSave>1e8?`Episodes in older video formats (H.264, MPEG-4 and the like) would shrink by about <strong>${size(oldSave)}</strong> as H.265. <button type="button" class="linkish" data-q="codec:h264">Show those shows</button>`:"Nearly everything already uses an efficient format (H.265 or AV1)."}</p></div>
+    <div class="stgrid">
+      <div><h3>Episodes by resolution</h3>${bars(res,v=>plural(v,"episode"),k=>parseInt(k)?`res:${parseInt(k)}`:"")}</div>
+      <div><h3>Episodes by video format</h3>${bars(codecs,v=>plural(v,"episode"),k=>k==="Not read yet"?"":`codec:${nz(k)}`)}</div>
+      <div><h3>Biggest shows</h3>${bars(big.map(r=>[r.match&&r.match.name||r.title,r.size]),v=>size(v),k=>`title:"${k.replace(/ \(\d{4}\)$/,"").replace(/"/g,"")}"`)}</div>
+      <div><h3>Genres</h3>${bars(genres.map(([k,v])=>[k,v[0]]),v=>plural(v,"show"),k=>k==="No genre"?"genre:none":`genre:"${k}"`)}</div>
+    </div>`;
+}
+$("#statsBtn").onclick=()=>{
+  $("#toolsMenu").open=false;
+  $("#stTitle").textContent=mode==="tv"?"TV library stats":"Movie library stats";
+  $("#stBody").innerHTML=rows.length?(mode==="tv"?statsTv():statsMovies()):'<p class="note">Scan your library first.</p>';
+  $("#statsDlg").showModal();
+};
+$("#stBody").onclick=e=>{const b=e.target.closest("[data-q]");if(!b)return;
+  $("#filter").value=b.dataset.q;$("#show").value="all";saveView();render();$("#statsDlg").close();$("#tbl").scrollIntoView({block:"start",behavior:"smooth"})};
+$("#stClose").onclick=()=>$("#statsDlg").close();
+
+/* ---------- backups ---------- */
+async function loadBackups(){
+  $("#bkBody").innerHTML='<p class="note">Loading…</p>';
+  try{const d=await api("/api/backups");showBackups(d.backups,d.folder)}catch(e){$("#bkBody").innerHTML=`<p class="err">${esc(e.message)}</p>`}
+}
+function showBackups(list,folder){
+  if(folder)$("#bkBody").dataset.folder=folder;
+  $("#bkBody").innerHTML=list.length?`<table class="bk"><tbody>${list.map(b=>`<tr><td>${esc(new Date(b.time*1000).toLocaleString([], {weekday:"short",year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}))}</td>
+      <td class="note">${esc(b.reason)}</td><td class="note">${esc(b.what.join(", "))}</td><td class="num note">${size(b.size)}</td>
+      <td><button class="ghost small" data-restore="${esc(b.id)}">Restore…</button></td></tr>`).join("")}</tbody></table>
+      <p class="note">Kept in ${esc($("#bkBody").dataset.folder||"the backups folder")}.</p>`:'<p class="note">No backups yet. The app makes one when it starts; or choose Back up now.</p>';
+}
+$("#bkBtn").onclick=()=>{$("#toolsMenu").open=false;$("#bkMsg").textContent="";$("#bkDlg").showModal();loadBackups()};
+$("#bkClose").onclick=()=>$("#bkDlg").close();
+$("#bkNow").onclick=async()=>{const done=busy($("#bkNow"),"Backing up…");
+  try{const d=await api("/api/backups/make",{});showBackups(d.backups);$("#bkMsg").textContent="Backed up."}catch(e){$("#bkMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}done()};
+$("#bkBody").onclick=async e=>{
+  const b=e.target.closest("[data-restore]");if(!b)return;
+  const when=b.closest("tr").cells[0].textContent;
+  if(!confirm(`Put back your matches, metadata edits, rename undo, History and settings as they were on ${when}?\n\nWhat you have now is backed up first, so you can undo this from here. Your API keys stay as they are, and no files are moved.`))return;
+  b.disabled=true;
+  try{const d=await api("/api/backups/restore",{id:b.dataset.restore});showBackups(d.backups);
+    $("#bkMsg").textContent=`Restored: ${d.restored.join(", ")}. What you had before is the newest backup, if you want it back.`;
+    api("/api/config").then(c=>{showSettings(c);showFolders(c)}).catch(()=>{});loadLibrary()}
+  catch(e){$("#bkMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`;b.disabled=false}
+};
+
+/* ---------- the log file, and notifications ---------- */
+$("#logBtn").onclick=async()=>{$("#toolsMenu").open=false;try{await api("/api/logs/open",{});status("Opened the log folder in Explorer.")}catch(e){status(e.message,true)}};
+$("#wNotifyTest").onclick=async()=>{try{await api("/api/notify/test",{});$("#wMsg").textContent="Sent a test notification. If none appeared, check Windows Settings → System → Notifications (and Do not disturb)."}catch(e){$("#wMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}};
 
 applyMode();
 loadLibrary();

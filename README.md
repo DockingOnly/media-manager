@@ -30,6 +30,11 @@ Open **Settings** and paste a free TMDB API key (themoviedb.org → Settings →
 | **Tools** | Playback check (which files Jellyfin will have to convert, per kind of player, and which can't be read), duplicates (copies compared side by side), leftovers (folders with nothing left to play). |
 | **History** | Everything the app moved, recycled or wrote, task by task. **Restore** brings things back from the Recycle Bin; **Move back** undoes a task's moves when every file is still where the app put it. |
 | **Export** | Movies, episodes, missing episodes and collections as CSV or a web page. |
+| **Filter and columns** | Type fields into the filter box: `res:4k codec:h264 year:<2000 size:>20gb sub:none -genre:horror` (the **?** beside it lists them all). Choose columns with **Columns ▾**: runtime, rating, HDR, audio, bitrate, genres, collection, age rating, date added. |
+| **Keyboard and right-click** | `J`/`K` or the arrows move through rows, `Space` selects, shift-click selects a range, `Enter` opens, `M` matches, `P` plays, `F` opens the folder, `?` lists the rest. Right-click a row for everything, including **Show in Jellyfin**. |
+| **Library stats** | Size by resolution and format, audio, HDR, decades, genres, the biggest files, and how much space removing duplicates or converting older formats would free. |
+| **Backups** | Your matches, edits, rename undo, History and settings are copied when the app starts and daily (newest 10 kept), with **Restore** under Tools → Backups. |
+| **Notifications** | A Windows notification when the folder watcher has handled new files. |
 
 ## Safety
 
@@ -38,7 +43,9 @@ Open **Settings** and paste a free TMDB API key (themoviedb.org → Settings →
   long or items too big for the bin would otherwise be deleted for good).
 * The last copy of a movie or episode is never recycled by the duplicates tool.
 * Every change is listed under Tools → History, with Restore and Move back.
-* API keys and passwords live only in `config.json`, which is never committed.
+* API keys and passwords are kept in **Windows Credential Manager** (encrypted with your Windows login), not in
+  `config.json`; the app moves them there when it starts. They're listed there as `media-manager/...`.
+* The app's window shows only actions and problems; `logs\media-manager.log` keeps the details.
 
 ## Command line
 

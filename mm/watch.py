@@ -148,6 +148,8 @@ def check_once(client=None, now: float = None) -> list:
             r["gone"] = seen["gone"]
             results.append(r)
             state.update(last=r, error=r["problem"], version=state["version"] + 1)
+            from . import notify
+            notify.watch_result(r)
         except core.UserError as err:  # e.g. you started something meanwhile: try again next time
             state["error"] = str(err)
         finally:

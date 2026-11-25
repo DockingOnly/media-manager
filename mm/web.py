@@ -1,6 +1,7 @@
 """The local web app: the page, its API, and shutting down when the browser tab closes."""
 import os
 import re
+import subprocess
 import threading
 import time
 import webbrowser
@@ -9,8 +10,8 @@ from urllib.parse import urlsplit
 
 from flask import Flask, Response, g, jsonify, request
 
-from . import (artwork, bulk, collections, core, dupes, export, history, jellyfin, leftovers, library, movie, nfo, playback,
-               renamer, subtitles, tmdbapi, trailers, trakt, watch)
+from . import (artwork, backup, bulk, collections, core, dupes, export, history, jellyfin, leftovers, library, logs, movie, nfo,
+               notify, playback, renamer, subtitles, tmdbapi, trailers, trakt, vault, watch)
 from .core import UserError
 
 app = Flask(__name__, static_folder=str(core.BASE / "static"), static_url_path="")
@@ -120,7 +121,8 @@ def settings_view(cfg: dict) -> dict:
             "has_fanart_key": bool(cfg.get("fanart_key")), "fanart_key_hint": (cfg.get("fanart_key") or "")[-4:],
             "jellyfin_url": cfg.get("jellyfin_url") or "", "has_jellyfin_key": bool(cfg.get("jellyfin_key")),
             "jellyfin_key_hint": (cfg.get("jellyfin_key") or "")[-4:], "jellyfin_map": cfg.get("jellyfin_map") or "",
-            "jellyfin_auto": cfg.get("jellyfin_auto", True), "watch": watch.settings(cfg)}
+            "jellyfin_auto": cfg.get("jellyfin_auto", True), "watch": watch.settings(cfg),
+            "keys_in_vault": vault.available(), "watch_notify": cfg.get("watch_notify", True)}
 
 
 @app.get("/api/config")
@@ -189,6 +191,8 @@ def api_settings():
             minutes = int(w.get("minutes") or 10)
         except (TypeError, ValueError):
             raise UserError("Enter how often to look for new files, in minutes.")
+        if "notify" in w:
+            changes["watch_notify"] = bool(w.get("notify"))
         changes.update(watch_on=bool(w.get("on")), watch_keep_alive=bool(w.get("keep_alive")),
                        watch_minutes=max(2, min(minutes, 24 * 60)),
                        watch_steps=[s for s in (w.get("steps") or []) if s in watch.STEPS])
@@ -518,6 +522,91 @@ def api_open_folder():
     return jsonify(ok=True)
 
 
+@app.post("/api/play")
+def api_play():
+    """Play a movie, or a show's first episode, in your usual video player."""
+    d = body()
+    if d.get("kind") == "tv":
+        root = core.require_tv_scan()
+        from . import tvlib
+        eps = sorted((i for i in tvlib.with_matches(list(core.tv_state["items"]), root) if i["key"] == d.get("id") and i["kind"] == "episode"),
+                     key=lambda i: (i["season"] or 99, i["episodes"]))
+        if not eps:
+            raise UserError("That show has no episodes to play.")
+        video = Path(root, eps[0]["path"])
+    else:
+        root = core.require_scan()
+        it = next((i for i in core.state["items"] if i["id"] == d.get("id")), None)
+        if not it:
+            raise UserError("That file is no longer in the library. Scan again.")
+        video = Path(root, it["path"])
+    if not video.exists():
+        raise UserError("That file no longer exists. Scan again to update the list.")
+    if os.name != "nt":
+        raise UserError("Playing files only works on Windows.")
+    os.startfile(str(video))
+    return jsonify(ok=True, name=video.name)
+
+
+@app.post("/api/jellyfin/find")
+def api_jellyfin_find():
+    """The Jellyfin page of a movie or show, to open it there."""
+    d = body()
+    if d.get("kind") == "tv":
+        root = core.require_tv_scan()
+        from . import tvlib
+        eps = [i for i in tvlib.with_matches(list(core.tv_state["items"]), root) if i["key"] == d.get("id")]
+        if not eps or not eps[0].get("show_dir"):
+            raise UserError("That show isn't in a show folder, so Jellyfin can't be asked about it.")
+        m = eps[0].get("match") or {}
+        return jsonify(jellyfin.find_item(str(root / eps[0]["show_dir"]), m.get("title") or eps[0].get("series") or "", "Series"))
+    root = core.require_scan()
+    items = library.with_matches([dict(i) for i in core.state["items"]])
+    it = next((i for i in items if i["id"] == d.get("id")), None)
+    if not it:
+        raise UserError("That file is no longer in the library. Scan again.")
+    m = it.get("match") or {}
+    return jsonify(jellyfin.find_item(str(Path(root, it["path"])), m.get("title") or it["title"], "Movie"))
+
+
+@app.get("/api/backups")
+def api_backups():
+    return jsonify(backups=backup.listing(), folder=str(backup.folder()), keep=backup.KEEP)
+
+
+@app.post("/api/backups/make")
+def api_backup_make():
+    made = backup.make("manual")
+    return jsonify(made=made, backups=backup.listing())
+
+
+@app.post("/api/backups/restore")
+def api_backup_restore():
+    r = backup.restore(body().get("id") or "")
+    return jsonify(**r, backups=backup.listing())
+
+
+@app.post("/api/logs/open")
+def api_logs_open():
+    """Show the log file in Explorer (for when something went wrong)."""
+    f = logs.log_file()
+    if os.name != "nt":
+        raise UserError("Opening folders only works on Windows.")
+    if f.exists():
+        subprocess.Popen(["explorer", "/select,", str(f)])
+    else:
+        logs.LOG_DIR.mkdir(exist_ok=True)
+        os.startfile(str(logs.LOG_DIR))
+    return jsonify(ok=True)
+
+
+@app.post("/api/notify/test")
+def api_notify_test():
+    if not notify.show("Media manager", "Notifications are working. You'll see one like this when new files have been handled."):
+        raise UserError("Windows notifications couldn't be shown here.")
+    return jsonify(ok=True)
+
+
 # ---------------------------------------------------------------- renaming, .nfo, deleting
 
 @app.get("/api/rename/preview")
@@ -753,6 +842,24 @@ from . import tvweb  # noqa: E402  (importing it registers the /api/tv/... endpo
 __all__ = ["app", "main", "tvweb"]
 
 
+def app_mode() -> None:
+    """What only the real app (and its command line) does: keep History, keep keys in Credential Manager, make
+    daily backups, write the log file, pop up notifications. Tests leave all of this off."""
+    history.enabled = True
+    if core.CONFIG != core.BASE / "config.json":
+        return  # a test using its own data files: never touch your credentials, backups, log or screen
+    vault.enabled = backup.enabled = notify.enabled = True
+    logs.setup()
+    try:
+        core.save_config()  # moves any keys still in config.json into Credential Manager
+    except OSError:
+        pass
+    try:
+        backup.daily()
+    except OSError:
+        pass
+
+
 def main() -> None:
     port = core.PORT
     if port_in_use(port):
@@ -763,9 +870,10 @@ def main() -> None:
             raise SystemExit(1)
         print("Closed it.")
     threading.Thread(target=watchdog, daemon=True).start()
-    history.enabled = True
+    app_mode()
     jellyfin.start()
     watch.start()
+    backup.start()
     threading.Timer(3.0, open_browser_unless_reconnected, args=(port,)).start()
     print(f"Media manager is running at http://127.0.0.1:{port}")
     print("Closing the browser tab shuts it down. You can also close this window.")
