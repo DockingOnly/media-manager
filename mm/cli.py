@@ -40,7 +40,8 @@ def parser():
 
 def run(argv=None) -> int:
     args = parser().parse_args(argv)
-    from . import web  # imports the app (routes and all) without starting a server
+    from . import history, web  # imports the app (routes and all) without starting a server
+    history.enabled = True
     c = web.app.test_client()
     tv = args.library == "tv"
     pre = "/api/tv" if tv else "/api"
@@ -156,7 +157,8 @@ def run(argv=None) -> int:
 
 def watch_forever() -> int:
     """app.py watch: look for new files every few minutes (Settings: how often, and which steps), and tell Jellyfin."""
-    from . import core, jellyfin, watch, web
+    from . import core, history, jellyfin, watch, web
+    history.enabled = True
     if web.port_in_use(core.PORT):
         print("The media manager is already running; it watches for new files itself while watching is on in Settings.")
         return 1

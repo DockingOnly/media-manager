@@ -294,6 +294,7 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
   <button class="ghost" id="traktBtn" hidden>Sync watched from Trakt…</button>
   <details class="menu" id="toolsMenu"><summary class="ghost" role="button" aria-haspopup="menu">Tools ▾</summary>
     <div class="menu-list" role="menu">
+      <button class="ghost" id="histBtn" role="menuitem">History… <small>what the app changed, with Restore and Move back</small></button>
       <button class="ghost" id="playBtn" role="menuitem">Playback check… <small>what Jellyfin will have to convert</small></button>
       <button class="ghost" id="dupBtn" role="menuitem">Find duplicates… <small>the same movie or episode twice</small></button>
       <button class="ghost" id="leftBtn" role="menuitem">Tidy leftovers… <small>folders with nothing left to play</small></button>
@@ -424,6 +425,13 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
     <p class="note full" style="margin:0">Each title's .nfo is updated (everything else in it is kept) and locked so Jellyfin keeps the change. Titles without a confirmed match are skipped.</p>
   </div>
   <div class="foot"><button class="ghost" id="bClose">Cancel</button><button id="bGo">Apply</button></div>
+</div></dialog>
+
+<dialog id="histDlg" class="wide" aria-labelledby="hTitle"><div class="dlg">
+  <div class="head"><h2 id="hTitle">History</h2><div class="note" id="hSum">Everything the app moved, recycled or wrote, newest first.</div></div>
+  <div class="body" id="hList"></div>
+  <div class="foot"><span class="grow note"><strong>Restore</strong> brings things back from the Recycle Bin while they're still there. <strong>Move back</strong> undoes a task's moves when every file is still where the app put it. Files written (.nfo, artwork, subtitles) can be rebuilt by running that task again.</span>
+    <button class="ghost" id="hMore" hidden>Older…</button><button class="ghost" id="hClose">Close</button></div>
 </div></dialog>
 
 <dialog id="playDlg" class="wide" aria-labelledby="pbTitle"><div class="dlg">
@@ -1256,6 +1264,52 @@ $("#lGo").onclick=async()=>{
 $("#toolsMenu").addEventListener("click",e=>{if(e.target.closest(".menu-list button"))$("#toolsMenu").open=false});
 document.addEventListener("click",e=>{if(!e.target.closest("#toolsMenu"))$("#toolsMenu").open=false});
 $("#toolsMenu").addEventListener("keydown",e=>{if(e.key==="Escape"){$("#toolsMenu").open=false;$("#toolsMenu summary").focus()}});
+
+/* ---------- history ---------- */
+let hist=[];
+const H_ICON={moved:["→","Moved"],recycled:["🗑","Sent to the Recycle Bin"],wrote:["✎","Written"],deleted:["✖","Deleted for good (network drive)"],restored:["↩","Restored"]};
+const when=t=>new Date(t*1000).toLocaleString([], {dateStyle:"medium",timeStyle:"short"});
+function histItem(e,it,i){
+  const [icon,label]=H_ICON[it.do]||["•",it.do];
+  const body=it.do==="moved"?`${esc(it.path)}<br><span class="note">→ ${esc(it.to)}</span>`:esc(it.path);
+  const act=it.do==="recycled"?(it.restored?`<span class="tag r">Restored</span>`:`<button class="ghost small" data-hrestore="${esc(e.id)}" data-i="${i}">Restore</button>`):"";
+  return `<li style="display:flex;gap:8px;padding:3px 0;align-items:flex-start"><span title="${esc(label)}" style="flex:none;width:1.4em">${icon}</span><span style="flex:1;word-break:break-all">${body}</span>${act}</li>`;
+}
+function renderHist(){
+  $("#hList").innerHTML=hist.map(e=>{
+    const c=e.counts,parts=[c.moved&&`${c.moved} moved`,c.recycled&&`${c.recycled} to the Recycle Bin`,c.restored&&`${c.restored} restored`,c.wrote&&`${c.wrote} written`,c.deleted&&`${c.deleted} deleted`].filter(Boolean).join(", ");
+    const items=e.items.map((it,i)=>[it,i]).sort((a,b)=>(a[0].do==="wrote")-(b[0].do==="wrote"));
+    return `<section style="padding:10px 0;border-bottom:1px solid var(--line)">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <strong>${esc(e.title)}</strong>${e.library==="tv"?' <span class="tag">TV</span>':""}<span class="note">${when(e.time)} · ${esc(parts)}</span>
+        <span style="flex:1"></span>
+        ${e.moved_back?`<span class="tag r">Moved back ${when(e.moved_back)}</span>`:""}
+        ${e.can_move_back?`<button class="ghost small" data-hback="${esc(e.id)}">Move back</button>`:""}
+        ${e.restorable>1?`<button class="ghost small" data-hrestore="${esc(e.id)}">Restore all ${e.restorable}</button>`:""}
+      </div>
+      <details style="margin-top:4px"><summary class="note" style="cursor:pointer">Show ${plural(e.items.length,"change")}</summary>
+        <ul style="list-style:none;padding:0;margin:6px 0 0">${items.slice(0,300).map(([it,i])=>histItem(e,it,i)).join("")}</ul>
+        ${e.items.length>300?`<p class="note">…and ${e.items.length-300} more.</p>`:""}</details></section>`}).join("")
+    ||'<p class="note">Nothing yet. From now on, everything the app moves, recycles or writes is listed here.</p>';
+}
+async function loadHist(more){
+  const d=await api("/api/history"+(more&&hist.length?`?before=${encodeURIComponent(hist[hist.length-1].id)}`:""));
+  hist=more?hist.concat(d.entries):d.entries;$("#hMore").hidden=!d.more;renderHist();
+}
+$("#histBtn").onclick=async()=>{try{await loadHist(false);$("#histDlg").showModal()}catch(e){finish(e.message,true)}};
+$("#hMore").onclick=()=>loadHist(true).catch(e=>$("#hSum").textContent=e.message);
+$("#hClose").onclick=()=>$("#histDlg").close();
+$("#hList").onclick=async e=>{
+  const b=e.target.closest("[data-hback],[data-hrestore]");if(!b)return;b.disabled=true;
+  try{
+    let msg;
+    if(b.dataset.hback){const d=await api("/api/history/move-back",{id:b.dataset.hback});
+      msg=`Moved ${plural(d.moved,"file")} back.`+(d.failed.length?` ${d.failed.length} couldn't be: ${d.failed.map(f=>f.error).join("; ")}`:"")}
+    else{const d=await api("/api/history/restore",{id:b.dataset.hrestore,...(b.dataset.i!==undefined?{index:+b.dataset.i}:{})});
+      msg=`Restored ${plural(d.restored.length,"item")} from the Recycle Bin.`+(d.failed.length?` Not restored: ${d.failed.map(f=>`${f.path} (${f.error})`).join("; ")}`:"")}
+    $("#hSum").textContent=msg;finish(msg);await loadHist(false);loadLibrary();
+  }catch(err){$("#hSum").textContent=err.message;b.disabled=false}
+};
 
 /* ---------- playback check ---------- */
 let pb=null;

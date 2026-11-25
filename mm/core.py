@@ -19,6 +19,7 @@ TV_LIBRARY = BASE / "tv_library.json"  # the last TV scan
 TV_MATCHES = BASE / "tv_matches.json"  # show folder -> TMDB show
 TV_CACHE = BASE / "tv_cache.json"      # TMDB show and episode details, refreshed weekly
 TV_RENAME_LOG = BASE / "tv_rename_log.json"
+HISTORY = BASE / "history.json"       # what the app changed, newest last (the History window)
 PROBES = BASE / "probe_cache.json"      # what ffmpeg said about each video (so it's read once, not every time)
 PORT = 8765
 USER_AGENT = "media-manager/0.8"
@@ -205,12 +206,46 @@ _changes = {}  # path -> when the app last changed it (for telling Jellyfin)
 _changes_lock = threading.Lock()
 
 
-def changed(*paths) -> None:
-    """Note that the app wrote, moved or recycled these files, so Jellyfin can be told to look again."""
+def changed(*paths, note_as: str = "wrote") -> None:
+    """Note that the app wrote, moved or recycled these files, so Jellyfin can be told to look again (and, for
+    files written, so the History window lists them)."""
     now = time.time()
     with _changes_lock:
         for p in paths:
             _changes[str(p)] = now
+    if note_as:
+        for p in paths:
+            note(note_as, path=p)
+
+
+# ---------------------------------------------------------------- history: what each task or click changed
+
+_act = threading.local()
+
+
+def note(do: str, **data) -> None:
+    """Add one change (moved, recycled, wrote, deleted, restored) to what the current task or click is doing."""
+    a = getattr(_act, "cur", None)
+    if a is not None:
+        a["items"].append({"do": do, **{k: str(v) for k, v in data.items()}})
+
+
+def begin_activity(kind: str, title: str, library: str = "") -> bool:
+    """Start collecting changes for one history entry (on this thread). False when one is already open."""
+    if getattr(_act, "cur", None) is not None:
+        return False
+    _act.cur = {"time": time.time(), "kind": kind, "title": title, "library": library, "items": []}
+    return True
+
+
+def end_activity() -> None:
+    a, _act.cur = getattr(_act, "cur", None), None
+    if a and a["items"]:
+        from . import history
+        try:
+            history.add(a)
+        except OSError:
+            pass
 
 
 def take_changes(quiet_for: float = 0) -> list:
@@ -228,7 +263,8 @@ def move(src: Path, dst: Path) -> None:
         raise OSError(f"“{dst.name}” already exists")
     dst.parent.mkdir(parents=True, exist_ok=True)
     os.rename(src, dst)  # same drive, so this is instant and keeps the file intact
-    changed(src, dst)
+    changed(src, dst, note_as=None)
+    note("moved", path=src, to=dst)
 
 
 def remove_empty_dirs(paths, root: Path) -> None:
@@ -254,9 +290,11 @@ def is_network_path(path: Path) -> bool:
 
 def discard(path: Path) -> None:
     """Recycle Bin when there is one; network drives have none, so the file or folder is deleted."""
-    changed(path)
+    changed(path, note_as=None)
+    original = path
     if is_network_path(path):
         shutil.rmtree(path) if path.is_dir() else path.unlink()
+        note("deleted", path=original)
         return
     try:
         from send2trash import send2trash
@@ -277,6 +315,7 @@ def discard(path: Path) -> None:
         os.rename(path, short)
         path = short
     send2trash(str(path))
+    note("recycled", path=original, binned=path)
 
 
 MAX_BIN_PATH = 259  # Windows' MAX_PATH (260) less the terminating character
@@ -373,6 +412,8 @@ def start_job(kind: str, label: str, total: int, work) -> str:
         jobs[job["id"]] = job
 
     def runner():
+        from . import history
+        collecting = begin_activity(kind, history.job_title(kind), "tv" if kind.startswith("tv") else "")
         try:
             job["result"] = work(job)
         except (TmdbError, SubError, UserError) as err:
@@ -384,6 +425,8 @@ def start_job(kind: str, label: str, total: int, work) -> str:
             logging.getLogger(__name__).exception("Task failed")
             job["error"] = f"Unexpected error: {err}"
         finally:
+            if collecting:
+                end_activity()
             job["finished"] = True
 
     threading.Thread(target=runner, daemon=True).start()

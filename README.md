@@ -28,6 +28,7 @@ Open **Settings** and paste a free TMDB API key (themoviedb.org → Settings →
 | **Jellyfin** | Tells Jellyfin which folders changed after every task, so it refreshes just those. Checks Jellyfin's library settings for anything that fights the app's files, with one-click fixes. |
 | **Watch for new files** | Every few minutes, new files that have finished copying are matched and get `.nfo` files and artwork. Renames always wait for you. |
 | **Tools** | Playback check (which files Jellyfin will have to convert, per kind of player, and which can't be read), duplicates (copies compared side by side), leftovers (folders with nothing left to play). |
+| **History** | Everything the app moved, recycled or wrote, task by task. **Restore** brings things back from the Recycle Bin; **Move back** undoes a task's moves when every file is still where the app put it. |
 | **Export** | Movies, episodes, missing episodes and collections as CSV or a web page. |
 
 ## Safety
@@ -36,6 +37,7 @@ Open **Settings** and paste a free TMDB API key (themoviedb.org → Settings →
 * Deleting means the **Recycle Bin**, and the app checks first that Windows will really keep it there (paths too
   long or items too big for the bin would otherwise be deleted for good).
 * The last copy of a movie or episode is never recycled by the duplicates tool.
+* Every change is listed under Tools → History, with Restore and Move back.
 * API keys and passwords live only in `config.json`, which is never committed.
 
 ## Command line
