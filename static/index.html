@@ -698,7 +698,7 @@ $("#mClose").onclick=()=>$("#matchDlg").close();
 
 /* ---------- renaming ---------- */
 let plans=[];
-const leftAlone=p=>(p.left_alone||[]).length?`<div class="note" style="margin:4px 0 0 28px">Left alone: ${plural(p.left_alone.length,"file")} whose names don't fit TMDB's episode list (extras numbered as episodes, episodes numbered differently, or one file holding episodes that aren't next to each other): <span style="word-break:break-all">${p.left_alone.slice(0,4).map(esc).join("; ")}${p.left_alone.length>4?` and ${p.left_alone.length-4} more`:""}</span></div>`:"";
+const leftAlone=p=>(p.left_alone||[]).length?`<div class="note" style="margin:4px 0 0 28px">Left alone: ${plural(p.left_alone.length,"file")} whose names don't fit TMDB's episode list (episodes numbered differently, or one file holding episodes that aren't next to each other; if the show follows TVDB or DVD numbering, choose that order in the show's window):<span style="word-break:break-all">${p.left_alone.slice(0,4).map(esc).join("; ")}${p.left_alone.length>4?` and ${p.left_alone.length-4} more`:""}</span></div>`:"";
 async function loadPlan(){
   $("#rBody").innerHTML="";$("#rSum").textContent="Working out the changes…";$("#rGo").disabled=true;
   try{

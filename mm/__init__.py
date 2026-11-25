@@ -18,6 +18,7 @@ web        the local web app and its API
 tvlib      TV: scanning, reading episode names, grouping into shows, what each show has
 tvmeta     TV: TMDB show matching (tvshow.nfo IDs first) and episode details, missing episodes
 tvrename   TV: Show (Year)/Season N/Show - S01E02 - Title, with preview and undo
+tvsort     TV: DVD extras and specials in a show folder: to TMDB's specials or Jellyfin's extras folders
 tvnfo      TV: tvshow.nfo, season.nfo and episode .nfo files
 tvart      TV: show artwork, season posters, episode thumbnails
 tvextras   TV: subtitles per episode, trailers per show

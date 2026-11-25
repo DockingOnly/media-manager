@@ -7,7 +7,7 @@ import os
 import time
 from pathlib import Path
 
-from . import core, nfo, tvlib, tvmeta
+from . import core, nfo, tvlib, tvmeta, tvsort
 from .core import key_of, rel, same_file
 
 MAX_TITLE = 90  # keeps paths well inside Windows' limits
@@ -48,7 +48,10 @@ def plan() -> dict:
 
         data = None
         used = {}
+        sorted_ids = sort_extras(eps, m, title, target, here, root, claimed, p, used)
         for it in sorted(eps, key=lambda i: i["path"]):
+            if it["id"] in sorted_ids:
+                continue
             if it.get("mismatch"):
                 if not it["named"]:
                     p["left_alone"].append(Path(it["path"]).name)
@@ -89,11 +92,81 @@ def plan() -> dict:
         elif p["left_alone"]:
             left_only.append({"name": folder_name, "left_alone": p["left_alone"]})
     view = [{"id": p["id"], "name": p["name"], "reason": p["reason"], "left_alone": p["left_alone"],
-             "changes": [{"kind": op["kind"], "from": rel(Path(op["src"]), root), "to": rel(Path(op["dst"]), root)}
+             "changes": [{"kind": op["kind"], "from": rel(Path(op["src"]), root),
+                          "to": "Recycle Bin (made for the wrong episode)" if op["kind"] == "bin" else rel(Path(op["dst"]), root)}
                          for op in p["ops"]]} for p in plans]
     already = sum(1 for it in items if it["kind"] == "episode" and it["named"])
     unmatched = len({it["key"] for it in items if not tvlib.confirmed(it["match"])})
     return {"plans": plans, "view": view, "already": already, "unmatched": unmatched, "left_only": left_only}
+
+
+def sort_extras(eps, m, title, target, here, root, claimed, p, used) -> set:
+    """Specials and extras (see tvsort): adds their moves to the show's plan; returns the files it took care of.
+
+    Only files that are clearly not episodes are touched: those whose title is one of TMDB's specials, those in
+    an extras folder ('ATHF Xtras'), and those numbered like an episode that's already here under its right
+    title (an extra that was given 'S01E03' when the real S01E03 sits beside it). Episodes that are simply
+    numbered differently (TVDB vs TMDB) are still left alone."""
+    agree = {(e["season"], n) for e in eps if e["kind"] == "episode" and not e.get("mismatch") for n in e["episodes"]}
+    picked = [it for it in eps if (it["kind"] == "episode" and it.get("mismatch"))
+              or (it["kind"] == "extra" and tvsort.in_extras_folder(Path(it["path"]).parts))]
+    if not picked:
+        return set()
+    data = tvmeta.data_for(m)
+    candidates = []
+    for it in sorted(picked, key=lambda i: i["path"]):
+        parts = Path(it["path"]).parts
+        if it["kind"] == "episode":
+            text = it.get("ep_title") or Path(it["path"]).stem
+            # numbered like an episode that's already here under its right title, and its own title isn't
+            # that episode's (so not a second copy of the episode, or a two-episode file like S07E01 S07E12)
+            dup = all((it["season"], n) in agree for n in it["episodes"]) and not (it.get("ep_title") and tvlib.title_agrees(it, data))
+        else:
+            text, dup = Path(it["path"]).stem, True
+        candidates.append((it, text, tvsort.extra_title(text, title), dup or tvsort.in_extras_folder(parts)))
+    regular = {tvsort.compact(e["name"]) for s, es in (data or {}).get("episodes", {}).items() if s != "0" for e in es}
+    done, extras = set(), []
+    for it, text, name, sure in candidates:
+        special = tvsort.special_for([name, tvsort.bare(text, title)], data) if tvsort.compact(name) not in regular else None
+        if special:
+            stem = episode_stem(title, 0, [special["episode"]], data, it.get("resolution", ""))
+            if add_moves(it, target / tvlib.season_folder(0), stem, here, root, claimed, p, used):
+                done.add(it["id"])
+        elif sure and name:
+            extras.append((it, name))
+    for (it, name), (folder, file_title) in zip(extras, tvsort.place([n for _, n in extras])):
+        stem = core.safe_name(file_title)[:MAX_TITLE].rstrip(" -&,") or "Extra"
+        if add_moves(it, target / folder, stem, here, root, claimed, p, used):
+            done.add(it["id"])
+    return done
+
+
+def add_moves(it, folder: Path, stem: str, here, root, claimed, p, used) -> bool:
+    """Move a file (and its subtitles, .nfo, thumbnail and trailer) to folder/stem; a second file wanting the
+    same name gets ' (2)'."""
+    video = Path(root, it["path"])
+    taken = used.setdefault(key_of(folder), set())
+    base, n = stem, 2
+    while stem.lower() in taken:
+        stem, n = f"{base} ({n})", n + 1
+    taken.add(stem.lower())
+    for f in [video] + tvlib.sidecars(video):
+        src = here(f)
+        tail = f.name[len(video.stem):].lower()
+        if f.is_file() and (tail == ".nfo" or tail.startswith("-thumb.")):
+            # written for the episode number the file wrongly had (S01E03's title and picture): not this file's
+            p["ops"].append({"kind": "bin", "src": str(src)})
+            continue
+        dst = folder / (stem + f.name[len(video.stem):])
+        if key_of(src) == key_of(dst):
+            continue
+        if dst.exists() and not same_file(dst, src if src.exists() else f):
+            p["reason"] = p["reason"] or f"“{rel(dst, root)}” already exists."
+        if key_of(dst) in claimed:
+            p["reason"] = f"Two files would both become “{rel(dst, root)}”."
+        claimed[key_of(dst)] = True
+        p["ops"].append({"kind": "file", "src": str(src), "dst": str(dst)})
+    return True
 
 
 def preview() -> dict:
@@ -138,9 +211,12 @@ def apply(job: dict, wanted: set, root: Path) -> dict:
             undo_point = len(done)
             try:
                 for op in p["ops"]:
+                    touched.append(str(Path(op["src"]).parent))
+                    if op["kind"] == "bin":  # (restorable from the Recycle Bin; the app writes fresh ones)
+                        core.discard(Path(op["src"]))
+                        continue
                     core.move(Path(op["src"]), Path(op["dst"]))
                     done.append(op)
-                    touched.append(str(Path(op["src"]).parent))
                 if p["renamed_show"]:
                     shows.append(p["renamed_show"])
             except OSError as err:

@@ -127,13 +127,14 @@ ok(shows["Seinfeld (1989)"]["to_rename"] == 1 and shows["Maul"]["to_rename"] == 
 # 2. rename preview
 pv = c.get("/api/tv/rename/preview").get_json()
 plans = {p["name"]: p for p in pv["plans"]}
-ok("Seinfeld (1989)" in plans and len(plans["Seinfeld (1989)"]["changes"]) == 2, f"Seinfeld: only the two-episode file and its subtitle change: {[ch['to'] for ch in plans.get('Seinfeld (1989)', {}).get('changes', [])]}")
+ok("Seinfeld (1989)" in plans and len([ch for ch in plans["Seinfeld (1989)"]["changes"] if "Xtras" not in ch["from"]]) == 2, f"Seinfeld: only the two-episode file and its subtitle change (besides the extras): {[ch['to'] for ch in plans.get('Seinfeld (1989)', {}).get('changes', [])]}")
 ok(any(ch["to"].endswith("Seinfeld - S07E14-E15 - The Cadillac (1) & The Cadillac (2).mkv") for ch in plans["Seinfeld (1989)"]["changes"]), "two-episode file named S07E14-E15 for Jellyfin")
 maul = plans["Maul (2025)"]["changes"]
 ok(len(maul) == 1 and maul[0]["kind"] == "folder", "Maul: just the folder gets its year; the episode inside is already right")
 ok(any(ch["to"].replace("\\", "/") == "Loki (2021)/Season 2/Loki - S02E01 - Ouroboros.mkv" for ch in plans["Loki (2021)"]["changes"]), "Loki: buried episodes go to Loki (2021)/Season N with TMDB titles")
 ok("Aqua Teen Hunger Force (2000)" in plans and plans["Aqua Teen Hunger Force (2000)"]["changes"][0]["to"].endswith("Aqua Teen Hunger Force - S01E02 - Carl's Pissed Boston Freakin' Won.mp4"), "Aqua Teen: the misleading name is fixed")
-ok(not any("Xtras" in ch["from"] for p in pv["plans"] for ch in p["changes"]), "extras are left alone")
+ok([ch["to"].replace("\\", "/") for p in pv["plans"] for ch in p["changes"] if "Xtras" in ch["from"]] == ["Seinfeld (1989)/other/Bloopers.mkv"],
+   "extras in an 'Xtras' folder move into the Jellyfin extras folder that fits (bloopers: 'other')")
 r = job("/api/tv/rename/apply", {"ids": [p["id"] for p in pv["plans"]]})
 t = tree()
 ok("Loki (2021)/Season 1/Loki - S01E01 - Glorious Purpose.mkv" in t and not any(x.startswith("Loki/") for x in t)

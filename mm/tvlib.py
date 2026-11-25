@@ -278,8 +278,9 @@ def sidecars(video: Path) -> list:
             if f.is_dir() and f.name.lower() == f"{video.stem}.trickplay".lower():
                 out.append(f)  # Jellyfin's seek-bar previews: they move with the episode, or Jellyfin rebuilds them
                 continue
-            if f.is_file() and f != video and f.name.startswith(video.stem) and f.suffix.lower() in SIDE_EXTS \
-                    and f.name[len(video.stem)] in ".-":
+            if f.is_file() and f != video and f.name.startswith(video.stem) and f.name[len(video.stem)] in ".-" and (
+                    f.suffix.lower() in SIDE_EXTS
+                    or (f.suffix.lower() in core.VIDEO_EXTS and f.name[len(video.stem):].lower().startswith("-trailer"))):
                 out.append(f)
     except OSError:
         pass
@@ -308,7 +309,9 @@ def annotate(items: list, root: Path) -> list:
             # A file holding episodes that aren't next to each other (S07E01 + S07E12) can't be written as
             # Jellyfin's range (S07E01-E12 would claim 1 to 12), so it's left as it is, like a title mismatch.
             gap = len(eps) > 1 and eps != list(range(eps[0], eps[-1] + 1))
-            it["mismatch"] = gap or not title_agrees(it, tvmeta.cached_for(it["match"]))
+            data = tvmeta.cached_for(it["match"])
+            from . import tvsort  # S01E19 when TMDB's season 1 has 18 episodes: not an episode TMDB knows
+            it["mismatch"] = gap or not title_agrees(it, data) or tvsort.not_on_list(data, it["season"], eps)
     return items
 
 
