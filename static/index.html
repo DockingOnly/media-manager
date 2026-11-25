@@ -208,6 +208,14 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
   <h2 style="margin-top:18px">Ratings (OMDb, optional)</h2>
   <div class="row"><div><label for="omdbKey">OMDb API key</label><input id="omdbKey" type="password" autocomplete="off" spellcheck="false" style="width:320px"></div></div>
   <p class="note">Adds IMDb, Rotten Tomatoes and Metacritic ratings to the .nfo files the app writes (IMDb becomes the rating Jellyfin shows; Rotten Tomatoes its critic rating). Get a free key (1,000 lookups a day) at omdbapi.com, and activate it from the email OMDb sends.</p>
+  <h2 style="margin-top:18px">Trakt (optional)</h2>
+  <div class="row">
+    <div><label for="trId">Client ID</label><input id="trId" type="password" autocomplete="off" spellcheck="false" style="width:300px"></div>
+    <div><label for="trSecret">Client Secret</label><input id="trSecret" type="password" autocomplete="off" spellcheck="false" style="width:300px"></div>
+    <button class="ghost" id="trConnect" type="button">Connect to Trakt</button> <button class="ghost" id="trDisconnect" type="button" hidden>Disconnect</button>
+  </div>
+  <p class="note">Brings your Trakt watched status (watched, play count, last watched) into the .nfo files, with <strong>Sync watched from Trakt</strong>. Trakt needs each app registered: on trakt.tv go to Settings → Your API Apps → New Application, give it any name, enter <code>urn:ietf:wg:oauth:2.0:oob</code> as the redirect URI, save, then paste the Client ID and Secret here and choose Save settings, then Connect. Jellyfin reads watched status from .nfo files for the user chosen under Dashboard → Display → NFO settings.</p>
+  <p id="trMsg" class="note" role="status"></p>
   <h2 style="margin-top:18px">Rename patterns</h2>
   <p class="note" style="margin-top:0">How the renamer names folders and files. Placeholders in curly brackets are filled in; empty ones (a missing year, say) are tidied away. Season 0 is always “Specials”, and episode names must include {code} (the S01E02 part Jellyfin reads). <button class="ghost small" id="patReset" type="button">Reset to defaults</button></p>
   <div class="pats">
@@ -247,6 +255,7 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
   <button class="ghost" id="artBtn">Download artwork…</button>
   <button class="ghost" id="collBtn">Collections…</button>
   <button id="bulkBtn" hidden>Edit selected…</button>
+  <button class="ghost" id="traktBtn" hidden>Sync watched from Trakt…</button>
   <button class="ghost" id="trBtn">Download trailers…</button>
   <button class="ghost" id="subBtn">Download subtitles…</button>
 </div>
@@ -468,7 +477,7 @@ async function api(url,data,method){
 function busy(btn,text){const old=btn.textContent;btn.disabled=true;btn.textContent=text;return()=>{btn.disabled=false;btn.textContent=old}}
 /* ---------- progress ---------- */
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const JOB_BUTTONS=["#scan","#matchAll","#renameBtn","#nfoBtn","#artBtn","#collBtn","#bulkBtn","#trBtn","#subBtn"];
+const JOB_BUTTONS=["#scan","#matchAll","#renameBtn","#nfoBtn","#artBtn","#collBtn","#bulkBtn","#traktBtn","#trBtn","#subBtn"];
 let jobId=null;
 function prog(cls){const p=$("#prog");p.hidden=false;p.className="prog"+(cls?" "+cls:"")}
 function status(t,err){  // a message with no bar
@@ -612,6 +621,9 @@ function showSettings(c){
   $("#ytLogin").value=c.yt_login||"";$("#ytFile").value=c.yt_cookie_file||"";$("#ytFileBox").hidden=$("#ytLogin").value!=="file";
   patDefaults=c.pattern_defaults||patDefaults;
   PAT_NAMES.forEach(k=>{$("#pat_"+k).value=(c.patterns||{})[k]||patDefaults[k]||""});showPatternExamples();
+  $("#trId").value=$("#trSecret").value="";$("#trId").placeholder=c.trakt_id_hint?`Saved (ends in ${c.trakt_id_hint})`:"";
+  $("#trSecret").placeholder=c.has_trakt_secret?"Saved":"";$("#trDisconnect").hidden=!c.trakt_connected;$("#traktBtn").hidden=!c.trakt_connected;
+  $("#trConnect").textContent=c.trakt_connected?"Connected ✓ (connect again)":"Connect to Trakt";
   $("#omdbKey").value="";$("#omdbKey").placeholder=c.has_omdb_key?`Saved (ends in ${c.omdb_key_hint})`:"Optional";
   $("#fanKey").value="";$("#fanKey").placeholder=c.has_fanart_key?`Saved (ends in ${c.fanart_key_hint})`:"Optional";
   $("#subLangs").value=c.sub_langs||"en";$("#sLangs").value=c.sub_langs||"en";$("#sHear").value=c.sub_hearing||"normal";
@@ -621,7 +633,7 @@ $("#saveSet").onclick=async()=>{
   const done=busy($("#saveSet"),"Checking…");
   try{const d=await api("/api/settings",{tmdb_key:$("#key").value,language:$("#lang").value,
       os_key:$("#osKey").value,os_user:$("#osUser").value,os_pass:$("#osPass").value,sub_langs:$("#subLangs").value,
-      yt_login:$("#ytLogin").value,yt_cookie_file:$("#ytFile").value,fanart_key:$("#fanKey").value,omdb_key:$("#omdbKey").value,
+      yt_login:$("#ytLogin").value,yt_cookie_file:$("#ytFile").value,fanart_key:$("#fanKey").value,omdb_key:$("#omdbKey").value,trakt_id:$("#trId").value,trakt_secret:$("#trSecret").value,
       patterns:Object.fromEntries(PAT_NAMES.map(k=>[k,$("#pat_"+k).value]))});showSettings(d);
     const notes=[d.verified&&"TMDB accepted the key.",d.os_info,d.omdb_info,d.fanart_info,"Settings saved."].filter(Boolean).join(" ");
     $("#setMsg").innerHTML=`<span class="tag r">${esc(notes)}</span>`}
@@ -901,6 +913,24 @@ function showFolders(c){
 $("#folderPick").onchange=()=>{if(jobId)return;$("#folder").value=$("#folderPick").value;rows=[];shows=[];scanFolder(true)};
 $("#folderForget").onclick=async()=>{const f=$("#folderPick").value;if(!f||!confirm(`Remove “${f}” from the list? Nothing on disk changes, and you can add it again by scanning it.`))return;
   try{const c=await api("/api/folders/forget",{folder:f,kind:mode==="tv"?"tv":"movies"});showFolders(c)}catch(e){status(e.message,true)}};
+
+/* ---------- Trakt ---------- */
+$("#trConnect").onclick=async()=>{
+  try{const d=await api("/api/trakt/connect",{});
+    $("#trMsg").innerHTML=`Go to <a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.url)}</a> and enter the code <strong style="font-size:1.2em;letter-spacing:.1em">${esc(d.code)}</strong>. Waiting for you…`;
+    for(let i=0;i<200;i++){await sleep((d.interval||5)*1000);
+      const r=await api("/api/trakt/connect");
+      if(r.state==="connected"){$("#trMsg").innerHTML='<span class="tag r">Connected to Trakt.</span>';const c=await api("/api/config");showSettings(c);return}
+      if(r.state==="expired"||r.state==="denied"){$("#trMsg").innerHTML=`<span class="err">${r.state==="denied"?"The connection was declined on Trakt.":"The code expired."} Choose Connect to try again.</span>`;return}}
+  }catch(e){$("#trMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}
+};
+$("#trDisconnect").onclick=async()=>{const c=await api("/api/trakt/disconnect",{});showSettings(c);$("#trMsg").textContent="Disconnected from Trakt."};
+$("#traktBtn").onclick=async()=>{
+  const clear=confirm("Also mark titles as UNWATCHED in the .nfo files when Trakt says you haven't watched them?\\n\\nOK = yes, clear those too.  Cancel = only add watched marks (safer).");
+  try{const d=await runJob("/api/trakt/sync",{kind:mode==="tv"?"tv":"movies",clear},"Asking Trakt",true);applyResult(d);
+    finish(`Trakt sync done: ${plural(d.updated,".nfo file")} updated; ${d.watched} ${mode==="tv"?"episodes":"movies"} here are watched on Trakt.`+(d.no_nfo?` ${d.no_nfo} have no .nfo yet (write .nfo files first).`:""))}
+  catch(e){finish(e.message,true)}
+};
 
 /* ---------- rename patterns: live examples (the app does the same when renaming) ---------- */
 const PAT_NAMES=["movie_folder","movie_file","tv_show_folder","tv_season_folder","tv_episode_file"];

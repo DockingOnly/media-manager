@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 from flask import Flask, jsonify, request
 
-from . import artwork, bulk, collections, core, library, movie, nfo, renamer, subtitles, tmdbapi, trailers
+from . import artwork, bulk, collections, core, library, movie, nfo, renamer, subtitles, tmdbapi, trailers, trakt
 from .core import UserError
 
 app = Flask(__name__, static_folder=str(core.BASE / "static"), static_url_path="")
@@ -67,6 +67,8 @@ def settings_view(cfg: dict) -> dict:
             "yt_login": cfg.get("yt_login") or "", "yt_cookie_file": cfg.get("yt_cookie_file") or "",
             "patterns": {k: core.pattern(k, cfg) for k in core.PATTERNS},
             "pattern_defaults": {k: v[0] for k, v in core.PATTERNS.items()},
+            "trakt_id_hint": (cfg.get("trakt_id") or "")[-4:], "has_trakt_secret": bool(cfg.get("trakt_secret")),
+            "trakt_connected": trakt.connected(),
             "has_omdb_key": bool(cfg.get("omdb_key")), "omdb_key_hint": (cfg.get("omdb_key") or "")[-4:],
             "has_fanart_key": bool(cfg.get("fanart_key")), "fanart_key_hint": (cfg.get("fanart_key") or "")[-4:]}
 
@@ -99,6 +101,11 @@ def api_settings():
             raise UserError("Enter the full path of your cookies.txt file.")
     if isinstance(data.get("patterns"), dict):
         changes["patterns"] = {k: core.check_pattern(k, data["patterns"].get(k, "")) for k in core.PATTERNS}
+    for field in ("trakt_id", "trakt_secret"):
+        value = (data.get(field) or "").strip()
+        if value:
+            changes[field] = value
+            trakt.disconnect()  # a different app needs connecting again
     omdb_key = (data.get("omdb_key") or "").strip()
     if omdb_key:
         from . import ratings
@@ -134,6 +141,34 @@ def api_settings():
     return jsonify({**settings_view(cfg), "verified": bool(key), "os_info": os_info,
                     "omdb_info": "OMDb accepted the key." if omdb_key else None,
                     "fanart_info": "fanart.tv accepted the key." if fanart_key else None})
+
+
+@app.post("/api/trakt/connect")
+def api_trakt_connect():
+    return jsonify(trakt.start_connect())
+
+
+@app.get("/api/trakt/connect")
+def api_trakt_connect_status():
+    return jsonify(trakt.poll_connect())
+
+
+@app.post("/api/trakt/disconnect")
+def api_trakt_disconnect():
+    trakt.disconnect()
+    return jsonify(settings_view(core.load_config()))
+
+
+@app.post("/api/trakt/sync")
+def api_trakt_sync():
+    d = body()
+    clear = bool(d.get("clear"))
+    trakt.access_token()  # fail fast when not connected
+    if d.get("kind") == "tv":
+        root = core.require_tv_scan()
+        return job_response("trakt", "Asking Trakt", 0, lambda job: trakt.sync_tv(job, root, clear))
+    root = core.require_scan()
+    return job_response("trakt", "Asking Trakt", 0, lambda job: trakt.sync_movies(job, root, clear))
 
 
 @app.post("/api/folders/forget")
