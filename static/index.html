@@ -152,6 +152,10 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 .orders{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:0 0 10px;background:var(--bg)}
 .orders li{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line)}
 .orders li:last-child{border-bottom:0}
+.pats{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;max-width:900px}
+.pats label{display:flex;flex-direction:column;gap:3px;font-weight:600}.pats .wide{grid-column:1/-1}
+.pats small{font-weight:400;color:var(--muted)}.pats output{font-weight:400;font-size:.9em;color:var(--ready);word-break:break-all}
+.pats output::before{content:"e.g. "}
 .colls{list-style:none;margin:0;padding:0}
 .colls>li{display:flex;gap:14px;padding:12px 0;border-bottom:1px solid var(--line)}
 .colls img,.colls .ph{width:70px;height:105px;object-fit:cover;border-radius:4px;background:var(--track);flex:none}
@@ -201,6 +205,15 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
   </div>
   <p class="note">Some trailers are age-restricted, and YouTube only shows them to signed-in users. The app tries every trailer without your login first and only uses it for those. Be signed in to youtube.com in the browser you choose. <strong>Firefox</strong> works directly. Chrome and Edge usually lock their logins on Windows; with those, install a “cookies.txt” export extension (for example “Get cookies.txt LOCALLY”), export while on youtube.com, and choose “A cookies.txt file”. Your login never leaves this computer.</p>
   <p id="ytMsg" class="note" role="status"></p>
+  <h2 style="margin-top:18px">Rename patterns</h2>
+  <p class="note" style="margin-top:0">How the renamer names folders and files. Placeholders in curly brackets are filled in; empty ones (a missing year, say) are tidied away. Season 0 is always “Specials”, and episode names must include {code} (the S01E02 part Jellyfin reads). <button class="ghost small" id="patReset" type="button">Reset to defaults</button></p>
+  <div class="pats">
+    <label>Movie folder<input id="pat_movie_folder" spellcheck="false"><small>{title} {year} {resolution} {codec} {source} {tmdb}</small><output id="ex_movie_folder"></output></label>
+    <label>Movie file<input id="pat_movie_file" spellcheck="false"><small>same placeholders</small><output id="ex_movie_file"></output></label>
+    <label>Show folder<input id="pat_tv_show_folder" spellcheck="false"><small>{title} {year} {tmdb} {tvdb}</small><output id="ex_tv_show_folder"></output></label>
+    <label>Season folder<input id="pat_tv_season_folder" spellcheck="false"><small>{season} or {season:02}</small><output id="ex_tv_season_folder"></output></label>
+    <label class="wide">Episode file<input id="pat_tv_episode_file" spellcheck="false"><small>{show} {code} {season} {episode} {episode_title} {resolution} (use :02 for leading zeros)</small><output id="ex_tv_episode_file"></output></label>
+  </div>
   <h2 style="margin-top:18px">Artwork (fanart.tv, optional)</h2>
   <div class="row">
     <div><label for="fanKey">fanart.tv API key</label><input id="fanKey" type="password" autocomplete="off" spellcheck="false" style="width:320px"></div>
@@ -573,6 +586,8 @@ function showSettings(c){
   $("#osUser").value=c.os_user||"";
   $("#osPass").placeholder=c.has_os_pass?"Saved":"";
   $("#ytLogin").value=c.yt_login||"";$("#ytFile").value=c.yt_cookie_file||"";$("#ytFileBox").hidden=$("#ytLogin").value!=="file";
+  patDefaults=c.pattern_defaults||patDefaults;
+  PAT_NAMES.forEach(k=>{$("#pat_"+k).value=(c.patterns||{})[k]||patDefaults[k]||""});showPatternExamples();
   $("#fanKey").value="";$("#fanKey").placeholder=c.has_fanart_key?`Saved (ends in ${c.fanart_key_hint})`:"Optional";
   $("#subLangs").value=c.sub_langs||"en";$("#sLangs").value=c.sub_langs||"en";$("#sHear").value=c.sub_hearing||"normal";
 }
@@ -581,7 +596,8 @@ $("#saveSet").onclick=async()=>{
   const done=busy($("#saveSet"),"Checking…");
   try{const d=await api("/api/settings",{tmdb_key:$("#key").value,language:$("#lang").value,
       os_key:$("#osKey").value,os_user:$("#osUser").value,os_pass:$("#osPass").value,sub_langs:$("#subLangs").value,
-      yt_login:$("#ytLogin").value,yt_cookie_file:$("#ytFile").value,fanart_key:$("#fanKey").value});showSettings(d);
+      yt_login:$("#ytLogin").value,yt_cookie_file:$("#ytFile").value,fanart_key:$("#fanKey").value,
+      patterns:Object.fromEntries(PAT_NAMES.map(k=>[k,$("#pat_"+k).value]))});showSettings(d);
     const notes=[d.verified&&"TMDB accepted the key.",d.os_info,d.fanart_info,"Settings saved."].filter(Boolean).join(" ");
     $("#setMsg").innerHTML=`<span class="tag r">${esc(notes)}</span>`}
   catch(e){$("#setMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}
@@ -844,6 +860,22 @@ $("#dGo").onclick=async()=>{
   }catch(e){$("#dMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}
   done();
 };
+
+/* ---------- rename patterns: live examples (the app does the same when renaming) ---------- */
+const PAT_NAMES=["movie_folder","movie_file","tv_show_folder","tv_season_folder","tv_episode_file"];
+let patDefaults={};
+const PAT_SAMPLES={movie_folder:{title:"Mission - Impossible",year:1996,resolution:"1080p",codec:"H.264",source:"Blu-ray",tmdb:954},
+  tv_show_folder:{title:"Seinfeld",year:1989,tmdb:1400,tvdb:79169},tv_season_folder:{season:7},
+  tv_episode_file:{show:"Seinfeld",code:"S07E14-E15",season:7,episode:14,episode_title:"The Cadillac (1) & The Cadillac (2)",resolution:"1080p"}};
+PAT_SAMPLES.movie_file=PAT_SAMPLES.movie_folder;
+function renderPattern(text,v){
+  let out=text.replace(/\{(\w+)(?::(\d+))?\}/g,(m,k,w)=>{const x=v[k];if(x===undefined||x===null||x==="")return"";return w&&/^\d+$/.test(String(x))?String(x).padStart(+w,"0"):String(x)});
+  out=out.replace(/\(\s*\)|\[\s*\]/g,"").replace(/(\s*-\s*){2,}/g," - ").replace(/\s+/g," ").replace(/^[\s\-._]+|[\s\-._]+$/g,"");
+  return out||"Untitled";
+}
+function showPatternExamples(){PAT_NAMES.forEach(k=>{const v=$("#pat_"+k).value||patDefaults[k]||"";$("#ex_"+k).textContent=renderPattern(v,PAT_SAMPLES[k])})}
+PAT_NAMES.forEach(k=>$("#pat_"+k).addEventListener("input",showPatternExamples));
+$("#patReset").onclick=()=>{PAT_NAMES.forEach(k=>$("#pat_"+k).value=patDefaults[k]||"");showPatternExamples()};
 
 /* ---------- YouTube login ---------- */
 $("#ytLogin").onchange=()=>{$("#ytFileBox").hidden=$("#ytLogin").value!=="file";$("#ytMsg").textContent=""};

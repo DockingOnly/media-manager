@@ -53,6 +53,7 @@ w("Seinfeld (1989)/Seinfeld Xtras/Bloopers.mkv", b"x")
 # Loki: no year on the folder, seasons buried in odd folders
 w("Loki/tvshow.nfo", show_nfo(84958))
 w("Loki/Loki (2021)/Season 1/Loki.S01E01.1080p.mkv", b"l1")
+w("Loki/Loki (2021)/Season 1/Loki.S01E01.1080p.trickplay/320 - 10x10/0.jpg", b"tp")  # Jellyfin's seek-bar previews
 w("Loki/Loki (2021) Season 2 S02 (1080p DSNP WEB-DL)/Season 2/Loki.S02E01.1080p.mkv", b"l2")
 # Maul: only the year is missing; its episode is otherwise named right
 w("Maul/tvshow.nfo", show_nfo(289219)); w("Maul/Season 1/Maul - S01E01 - Chapter One.mkv", b"m1")
@@ -137,6 +138,7 @@ r = job("/api/tv/rename/apply", {"ids": [p["id"] for p in pv["plans"]]})
 t = tree()
 ok("Loki (2021)/Season 1/Loki - S01E01 - Glorious Purpose.mkv" in t and not any(x.startswith("Loki/") for x in t)
    and not (tv / "Loki (2021)" / "Loki (2021)").exists(), "Loki rearranged and the empty old folders removed")
+ok("Loki (2021)/Season 1/Loki - S01E01 - Glorious Purpose.trickplay/320 - 10x10/0.jpg" in t, "Jellyfin's .trickplay folder moved and renamed with its episode")
 ok("Maul (2025)/Season 1/Maul - S01E01 - Chapter One.mkv" in t and "Seinfeld (1989)/Season 7/Seinfeld - S07E14-E15 - The Cadillac (1) & The Cadillac (2).en.srt" in t, "Maul renamed; the subtitle moved with its episode")
 ok(all(s["named"] for s in r["shows"]) and all(s["match"] for s in r["shows"]), "everything named, and every show still matched after its folder was renamed")
 u = c.post("/api/tv/rename/undo").get_json()

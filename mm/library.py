@@ -228,7 +228,8 @@ def own_folder(item: dict, folders: dict, root: Path, confirmed: bool = False) -
 
 
 def sidecars(video: Path) -> list:
-    """Files in the same folder named like the video, such as 'Movie.en.srt' or 'Movie-poster.jpg'."""
+    """Files in the same folder named like the video, such as 'Movie.en.srt' or 'Movie-poster.jpg', and Jellyfin's
+    'Movie.trickplay' folder."""
     out = []
     try:
         entries = list(video.parent.iterdir())
@@ -238,6 +239,9 @@ def sidecars(video: Path) -> list:
     longer = [e.stem for e in entries if e != video and e.is_file() and e.suffix.lower() in core.VIDEO_EXTS
               and len(e.stem) > len(video.stem) and e.stem.startswith(video.stem) and not SKIP_FILE.search(e.stem)]
     for f in entries:
+        if f.is_dir() and f.name.lower() == f"{video.stem}.trickplay".lower():
+            out.append(f)  # Jellyfin's seek-bar previews for this video: they move with it, or Jellyfin rebuilds them
+            continue
         if not (f.is_file() and f != video and f.name.startswith(video.stem) and f.name[len(video.stem)] in ".-"):
             continue
         if any(f.name.startswith(o) for o in longer):
@@ -279,10 +283,23 @@ def sub_languages(names: dict, stem: str) -> list:
     return sorted(langs)
 
 
+def movie_names(match: dict, item: dict, cfg: dict = None):
+    """A movie's folder name and file name (before any version or part suffix), from the rename patterns.
+    Your edited title and year win over TMDB's."""
+    from . import nfo
+    cfg = core.load_config() if cfg is None else cfg
+    edits = nfo.load_edits(match["tmdb_id"])
+    values = {"title": edits.get("title") or match["title"], "year": edits.get("year") or match.get("year"),
+              "resolution": item.get("resolution", ""), "codec": item.get("codec", ""), "source": item.get("source", ""),
+              "tmdb": match["tmdb_id"]}
+    return core.render(core.pattern("movie_folder", cfg), values), core.render(core.pattern("movie_file", cfg), values)
+
+
 def annotate(items: list, root: Path) -> list:
     """Mark each file with what Jellyfin will find: .nfo, artwork, trailer, subtitles, and correct naming."""
     folders = by_folder(items, root)
     listings = {}
+    cfg = core.load_config()
     for it in items:
         video = Path(root, it["path"])
         folder = video.parent
@@ -303,9 +320,11 @@ def annotate(items: list, root: Path) -> list:
             "subs": sub_languages(names, stem),
         }
         m = it.get("match") or {}
-        name = m.get("name") if m.get("status") in core.MATCHED else None
-        # Named for Jellyfin: in a folder called "Title (Year)", with a file name that starts the same way
-        it["named"] = bool(name and folder.name == name and video.stem.startswith(name))
+        it["named"] = False
+        if m.get("status") in core.MATCHED:
+            # Named for Jellyfin: in its folder ("Title (Year)" or your pattern), with a file name that starts right
+            folder_name, file_name = movie_names(m, it, cfg)
+            it["named"] = folder.name == folder_name and video.stem.startswith(file_name)
     return items
 
 

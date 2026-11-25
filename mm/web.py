@@ -63,6 +63,8 @@ def settings_view(cfg: dict) -> dict:
             "os_user": cfg.get("os_user", ""), "has_os_pass": bool(cfg.get("os_pass")),
             "sub_langs": cfg.get("sub_langs") or "en", "sub_hearing": cfg.get("sub_hearing") or "normal",
             "yt_login": cfg.get("yt_login") or "", "yt_cookie_file": cfg.get("yt_cookie_file") or "",
+            "patterns": {k: core.pattern(k, cfg) for k in core.PATTERNS},
+            "pattern_defaults": {k: v[0] for k, v in core.PATTERNS.items()},
             "has_fanart_key": bool(cfg.get("fanart_key")), "fanart_key_hint": (cfg.get("fanart_key") or "")[-4:]}
 
 
@@ -92,6 +94,8 @@ def api_settings():
         changes["yt_cookie_file"] = (data.get("yt_cookie_file") or "").strip().strip('"')
         if source == "file" and not changes["yt_cookie_file"]:
             raise UserError("Enter the full path of your cookies.txt file.")
+    if isinstance(data.get("patterns"), dict):
+        changes["patterns"] = {k: core.check_pattern(k, data["patterns"].get(k, "")) for k in core.PATTERNS}
     fanart_key = (data.get("fanart_key") or "").strip()
     if fanart_key:
         artwork.check_fanart_key(fanart_key)  # raises if fanart.tv refuses it

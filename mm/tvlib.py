@@ -19,14 +19,15 @@ RELEASE_WORDS = re.compile(r"(?i)\b(?:\d{3,4}p|4k|uhd|hdr\d*|dv|sdr|web(?:[ .-]?
                            r"hdtv|dvdrip|dvd|remux|proper|repack|internal|x26[45]|h[ .]?26[45]|hevc|avc|xvid|divx|10bit|8bit|"
                            r"aac\d?(?:[ .]\d)?|ac3|eac3|ddp?\d?(?:[ .]\d)?|dts(?:[ .-]?hd)?|truehd|atmos|flac|mp3|"
                            r"dsnp|amzn|hmax|atvp|pcok|pmtp|eng|ita)\b")  # (not words that also appear in titles)
-SEASON_DIR = re.compile(r"^(?:season|series|staffel|saison|temporada)[ ._-]*(\d{1,3})$", re.I)
+SEASON_DIR = re.compile(r"^(?:season|series|staffel|saison|temporada|s)[ ._-]*(\d{1,3})$", re.I)
 SPECIALS = {"specials", "special", "season 0", "season 00"}
 SKIP_DIRS = library.SKIP_DIRS | {"extrathumbs", "extrafanart", "theme-music", "backdrops"}
 SIDE_EXTS = core.SUB_EXTS | {".nfo", ".jpg", ".jpeg", ".png"}
 
 
 def season_folder(season: int) -> str:
-    return "Specials" if season == 0 else f"Season {season}"
+    """'Season 1' (or your pattern); season 0 is always 'Specials', which Jellyfin expects."""
+    return "Specials" if season == 0 else core.render(core.pattern("tv_season_folder"), {"season": season})
 
 
 def episode_code(season: int, episodes: list) -> str:
@@ -184,11 +185,19 @@ def confirmed(match) -> bool:
 
 
 def show_name_parts(match: dict, edits: dict = None):
-    """The show's folder name 'Title (Year)' and the title used in episode file names (no year)."""
+    """The show's folder name ('Title (Year)', or your pattern) and the title used in episode file names."""
     edits = edits or {}
     title = edits.get("title") or match["title"]
     year = edits.get("year") or match.get("year")
-    return core.jellyfin_name(title, year), core.safe_name(title)
+    from . import tvmeta
+    tvdb = ((tvmeta.cached(match["tmdb_id"]) or {}).get("show") or {}).get("tvdb_id")
+    values = {"title": title, "year": year, "tmdb": match["tmdb_id"], "tvdb": tvdb}
+    return core.render(core.pattern("tv_show_folder"), values), core.safe_name(title)
+
+
+def episode_values(title: str, season: int, episodes: list, episode_title: str = "", resolution: str = "") -> dict:
+    return {"show": title, "code": episode_code(season, episodes), "season": season, "episode": episodes[0],
+            "episode_title": episode_title, "resolution": resolution}
 
 
 def target_show_dir(root: Path, match: dict) -> Path:
@@ -202,11 +211,20 @@ def same_name(a: str, b: str) -> bool:
     return a == b or norm_title(a) == norm_title(b)
 
 
-def starts_right(stem: str, title: str, season: int, episodes: list) -> bool:
-    """'Show - S01E02 ...': the show's title, then this episode's code in Jellyfin's form."""
+def starts_right(stem: str, title: str, season: int, episodes: list, resolution: str = "") -> bool:
+    """Does the file name follow the episode pattern up to the episode title ('Show - S01E02 ...')? Whatever the
+    episode title says, and ignoring punctuation-only differences."""
+    pat = core.pattern("tv_episode_file")
+    head = pat.split("{episode_title}")[0]
+    want = core.render(head, episode_values(title, season, episodes, "", resolution)) if head.strip() else ""
+    code = episode_code(season, episodes)
     m = SXXEYY.search(stem)
-    return bool(m) and same_name(stem[:m.start()].rstrip(" -._"), title) \
-        and stem[m.start():].upper().startswith(episode_code(season, episodes).upper())
+    if not m or not stem[m.start():].upper().startswith(code.upper()):
+        return False
+    if "{episode_title}" not in pat:
+        return same_name(stem, core.render(pat, episode_values(title, season, episodes, "", resolution)))
+    a, b = norm_title(stem), norm_title(want)
+    return a == b or a.startswith(b + " ")
 
 
 IGNORED_WORDS = {"part", "pt", "chapter"}
@@ -248,14 +266,18 @@ def episode_named(it: dict, root: Path) -> bool:
     folder_name, title = show_name_parts(m, nfo.load_edits(f"tv:{m['tmdb_id']}"))
     path = Path(root, it["path"])
     return (path.parent.name == season_folder(it["season"]) and path.parent.parent.parent == root
-            and same_name(path.parent.parent.name, folder_name) and starts_right(path.stem, title, it["season"], it["episodes"]))
+            and same_name(path.parent.parent.name, folder_name)
+            and starts_right(path.stem, title, it["season"], it["episodes"], it.get("resolution", "")))
 
 
 def sidecars(video: Path) -> list:
-    """Subtitles, .nfo and '-thumb.jpg' named after the episode file."""
+    """Subtitles, .nfo and '-thumb.jpg' named after the episode file, and Jellyfin's '.trickplay' folder."""
     out = []
     try:
         for f in video.parent.iterdir():
+            if f.is_dir() and f.name.lower() == f"{video.stem}.trickplay".lower():
+                out.append(f)  # Jellyfin's seek-bar previews: they move with the episode, or Jellyfin rebuilds them
+                continue
             if f.is_file() and f != video and f.name.startswith(video.stem) and f.suffix.lower() in SIDE_EXTS \
                     and f.name[len(video.stem)] in ".-":
                 out.append(f)

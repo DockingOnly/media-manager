@@ -106,6 +106,58 @@ def jellyfin_name(title: str, year) -> str:
     return f"{safe_name(title)} ({year})" if year else safe_name(title)
 
 
+# ---------------------------------------------------------------- rename patterns
+
+PATTERNS = {  # setting -> (default, placeholders allowed, placeholders required)
+    "movie_folder": ("{title} ({year})", {"title", "year", "resolution", "codec", "source", "tmdb"}, {"title"}),
+    "movie_file": ("{title} ({year})", {"title", "year", "resolution", "codec", "source", "tmdb"}, {"title"}),
+    "tv_show_folder": ("{title} ({year})", {"title", "year", "tmdb", "tvdb"}, {"title"}),
+    "tv_season_folder": ("Season {season}", {"season"}, {"season"}),
+    "tv_episode_file": ("{show} - {code} - {episode_title}", {"show", "code", "season", "episode", "episode_title", "resolution"}, {"code"}),
+}
+TOKEN = re.compile(r"\{(\w+)(?::(\d+))?\}")
+
+
+def pattern(name: str, cfg: dict = None) -> str:
+    cfg = load_config() if cfg is None else cfg
+    return (cfg.get("patterns") or {}).get(name) or PATTERNS[name][0]
+
+
+def check_pattern(name: str, text: str) -> str:
+    """Refuse a pattern Jellyfin couldn't work with. Returns the cleaned-up pattern."""
+    text = " ".join((text or "").split())
+    if not text:
+        return PATTERNS[name][0]
+    _, allowed, required = PATTERNS[name]
+    used = {m.group(1) for m in TOKEN.finditer(text)}
+    unknown = used - allowed
+    if unknown:
+        raise UserError(f"“{{{sorted(unknown)[0]}}}” can't be used there. Use: " + ", ".join(f"{{{t}}}" for t in sorted(allowed)) + ".")
+    missing = required - used
+    if missing:
+        raise UserError(f"That pattern needs {{{sorted(missing)[0]}}}" +
+                        (" (the S01E02 part Jellyfin reads)." if "code" in missing else "."))
+    if re.search(r'[<>:"/\\|?*]', TOKEN.sub("", text)):
+        raise UserError('Patterns can\'t contain any of < > : " / \\ | ? *')
+    return text
+
+
+def render(text: str, values: dict) -> str:
+    """Fill in a pattern, then tidy what an empty placeholder leaves behind ('Title ()', 'A -  - B')."""
+    def one(m):
+        v = values.get(m.group(1))
+        if v in (None, ""):
+            return ""
+        if m.group(2) and str(v).isdigit():
+            return str(int(v)).zfill(int(m.group(2)))
+        return str(v)
+    out = TOKEN.sub(one, text)
+    out = re.sub(r"\(\s*\)|\[\s*\]|\{\s*\}", "", out)
+    out = re.sub(r"(\s*-\s*){2,}", " - ", out)
+    out = re.sub(r"\s+", " ", out).strip(" -._")
+    return safe_name(out) if out else "Untitled"
+
+
 def norm_title(text: str) -> str:
     import unicodedata
     text = unicodedata.normalize("NFKD", str(text or "")).encode("ascii", "ignore").decode()

@@ -13,14 +13,14 @@ from .core import key_of, rel, same_file
 MAX_TITLE = 90  # keeps paths well inside Windows' limits
 
 
-def episode_stem(title: str, season: int, episodes: list, data) -> str:
+def episode_stem(title: str, season: int, episodes: list, data, resolution: str = "") -> str:
+    """The episode's new file name (without extension), from the episode pattern."""
     names = [((tvmeta.episode(data, season, n) or {}).get("name") or "").strip() for n in episodes]
     names = [n for n in names if n]
     ep_title = core.safe_name(" & ".join(dict.fromkeys(names))) if names else ""
     if len(ep_title) > MAX_TITLE:
         ep_title = ep_title[:MAX_TITLE].rsplit(" ", 1)[0].rstrip(" -&,")
-    stem = f"{title} - {tvlib.episode_code(season, episodes)}"
-    return f"{stem} - {ep_title}" if ep_title else stem
+    return core.render(core.pattern("tv_episode_file"), tvlib.episode_values(title, season, episodes, ep_title, resolution))
 
 
 def plan() -> dict:
@@ -60,12 +60,12 @@ def plan() -> dict:
             video = Path(root, it["path"])
             season_dir = target / tvlib.season_folder(it["season"])
             moved = here(video)
-            if key_of(moved.parent) == key_of(season_dir) and tvlib.starts_right(moved.stem, title, it["season"], it["episodes"]):
+            if key_of(moved.parent) == key_of(season_dir) and tvlib.starts_right(moved.stem, title, it["season"], it["episodes"], it.get("resolution", "")):
                 used.setdefault(key_of(season_dir), set()).add(moved.stem.lower())
                 continue  # only the show folder's name was wrong; this file is fine inside it
             if data is None:
                 data = tvmeta.data_for(m)
-            stem = episode_stem(title, it["season"], it["episodes"], data)
+            stem = episode_stem(title, it["season"], it["episodes"], data, it.get("resolution", ""))
             taken = used.setdefault(key_of(season_dir), set())
             if stem.lower() in taken:  # two files of the same episode
                 n = 2
