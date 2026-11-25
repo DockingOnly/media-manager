@@ -38,6 +38,15 @@ def user_error(err):
     return jsonify(error=str(err)), 400
 
 
+@app.errorhandler(OSError)
+def file_error(err):
+    """A file problem the page can show (not a server error page)."""
+    if isinstance(err, PermissionError):
+        return jsonify(error=f"Windows wouldn't let the app use {getattr(err, 'filename', None) or 'a file'} just now "
+                             "(another program had it open). Try again in a moment."), 409
+    return jsonify(error=f"File error: {getattr(err, 'strerror', None) or err}"), 500
+
+
 def body() -> dict:
     return request.get_json(silent=True) or {}
 

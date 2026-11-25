@@ -52,9 +52,30 @@ class QuotaError(SubError):
 
 # ---------------------------------------------------------------- storage
 
+BUSY_WAIT = 3.0  # seconds to keep trying while Windows says a file is in use (another tab, antivirus, backup)
+
+
+def _retry(action, what: Path):
+    """Run action(); while Windows says the file is busy, wait a moment and try again."""
+    end = time.time() + BUSY_WAIT
+    while True:
+        try:
+            return action()
+        except PermissionError:
+            if time.time() > end:
+                raise
+            time.sleep(0.03)
+
+
 def load_json(path: Path, default):
+    """The file's data, or default when it doesn't exist (or isn't valid). A file that's only busy for a moment is
+    read again, never taken as empty: saving after an 'empty' read would wipe your settings."""
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(_retry(lambda: path.read_text(encoding="utf-8"), path))
+    except FileNotFoundError:
+        return default
+    except PermissionError:
+        raise
     except (OSError, ValueError):
         return default
 
@@ -78,10 +99,27 @@ def read_json(path: Path, default):
     return data
 
 
+_save_locks = {}
+_save_locks_lock = threading.Lock()
+
+
 def save_json(path: Path, data) -> None:
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-    os.replace(tmp, path)
+    """Write the whole file at once (a temporary copy, then swapped in), one save at a time per file, waiting a
+    moment if Windows says the file is in use."""
+    with _save_locks_lock:
+        file_lock = _save_locks.setdefault(key_of(path), threading.Lock())
+    text = json.dumps(data, indent=2, ensure_ascii=False)
+    with file_lock:
+        tmp = path.with_name(f"{path.name}.{os.getpid()}-{threading.get_ident()}.tmp")
+        try:
+            tmp.write_text(text, encoding="utf-8")
+            _retry(lambda: os.replace(tmp, path), path)
+        finally:
+            if tmp.exists():
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
 
 
 def load_config() -> dict:
