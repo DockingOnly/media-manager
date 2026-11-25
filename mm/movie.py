@@ -136,6 +136,9 @@ def set_art(item_id: str, kind: str, url: str) -> dict:
         it, items, root = find(item_id)
         folders = library.by_folder(items, root)
         artwork.save(Path(root, it["path"]), library.own_folder(it, folders, root), kind, url, replace=True)
+        if kind == "poster":
+            from . import badges
+            badges.keep_up(library.current_items(), root)
     return detail(item_id)
 
 

@@ -147,7 +147,7 @@ vault.enabled = False
 
 # the command line switches on the app's own features, but never for a test's own data files
 web.app_mode()
-ok(not vault.enabled and not backup.enabled and not notify.enabled and not (core.BASE / "logs").exists(),
+ok(not vault.enabled and not backup.enabled and not notify.enabled and not getattr(logging.getLogger("werkzeug"), "_mm_setup", False),
    "with test data files, app mode leaves Credential Manager, backups, the log and notifications alone")
 
 shutil.rmtree(S, ignore_errors=True)

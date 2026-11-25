@@ -175,6 +175,34 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 .menu-list label{display:flex;gap:8px;align-items:center;padding:3px 8px;font-weight:400;cursor:pointer}
 .menu-list label:has(input:disabled){cursor:default;color:var(--muted)}
 #colsList{min-width:210px;left:auto;right:0}
+.cvopts{display:flex;flex-wrap:wrap;gap:10px 16px;margin-top:10px;align-items:flex-end}
+.cvopts label{display:flex;flex-direction:column;gap:3px;font-weight:600}
+.cvopts label.chk,.smform label.chk,label.chk{flex-direction:row;align-items:center;gap:8px;font-weight:400}
+.cvtbl{width:100%;border-collapse:collapse;font-size:.92em}
+.cvtbl td,.cvtbl th{padding:6px 8px;border-top:1px solid var(--line);border-bottom:0;text-align:left;vertical-align:top;white-space:normal}
+.cvtbl td.n,.cvtbl th.n{text-align:right;white-space:nowrap}
+.cvtbl .sub{color:var(--muted);font-size:.9em}
+.cvrun{border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin:0 0 14px}
+.cvbar{height:8px;background:var(--track);border-radius:4px;overflow:hidden;margin:6px 0}.cvbar span{display:block;height:100%;background:var(--accent);transition:width .4s}
+.cvres{list-style:none;margin:6px 0 0;padding:0;font-size:.92em}.cvres li{padding:3px 0}
+.cvres .ok{color:var(--ready)}.cvres .kept{color:var(--muted)}.cvres .bad{color:var(--todo)}
+#convPill{font-weight:600;color:var(--accent)}
+.smitem{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)}
+.smitem .grow{flex:1;min-width:0}.smitem code{word-break:break-word}
+.smform{border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-top:14px;display:flex;flex-direction:column;gap:10px}
+.smform h3{margin:0}
+.smform label{display:flex;flex-direction:column;gap:3px;font-weight:600}
+.smform .row{display:flex;gap:12px;flex-wrap:wrap}.smform .row label:first-child{flex:1;min-width:220px}
+.presets{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.bdgrid{display:grid;grid-template-columns:minmax(220px,1fr) 2fr;gap:18px}
+.bdgrid fieldset{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:0 0 10px}
+.bdgrid fieldset label{display:flex;gap:8px;align-items:center;padding:2px 0;font-weight:400}
+.bdgrid>div>label{display:flex;flex-direction:column;gap:3px;font-weight:600;margin:0 0 10px}
+.bdgrid>div>label.chk{flex-direction:row;align-items:center;gap:8px;font-weight:400}
+.bdprev{display:flex;gap:12px}.bdprev figure{margin:0;flex:1;text-align:center}
+.bdprev img{width:100%;max-width:300px;aspect-ratio:2/3;object-fit:cover;border-radius:6px;background:var(--track)}
+.bdprev figcaption{color:var(--muted);font-size:.9em;margin-top:4px}
+@media(max-width:700px){.bdgrid{grid-template-columns:1fr}}
 .qhelp{left:auto!important;right:0;min-width:min(620px,92vw);max-height:65vh;overflow:auto;padding:12px 14px!important;display:block!important;font-size:.92em}
 .qhelp p{margin:0 0 8px}
 .qhelp table{width:100%}.qhelp td{padding:3px 8px;white-space:normal;vertical-align:top}
@@ -212,7 +240,8 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
 <main>
 <header>
   <div class="left"><h1 id="appTitle">Movie library</h1>
-    <div class="tabs" role="tablist" aria-label="Library"><button role="tab" id="tabMovies" aria-selected="true">Movies</button><button role="tab" id="tabTv" aria-selected="false">TV shows</button></div></div>
+    <div class="tabs" role="tablist" aria-label="Library"><button role="tab" id="tabMovies" aria-selected="true">Movies</button><button role="tab" id="tabTv" aria-selected="false">TV shows</button></div>
+    <button class="ghost small" id="convPill" hidden title="Show the conversions"></button></div>
   <button class="ghost" id="setBtn" aria-expanded="false" aria-controls="settings">Settings</button>
 </header>
 
@@ -336,6 +365,9 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
       <button class="ghost" id="collBtn" role="menuitem">Collections… <small>which films in a series you're missing</small></button>
       <button class="ghost" id="jfCheckBtn" role="menuitem">Check Jellyfin's settings… <small>anything that fights this app's files</small></button>
       <button class="ghost" id="statsBtn" role="menuitem">Library stats… <small>sizes, formats, and space you could win back</small></button>
+      <button class="ghost" id="convBtn" role="menuitem">Convert to a smaller format… <small>H.265 or AV1, only where it pays off</small></button>
+      <button class="ghost" id="smartBtn" role="menuitem">Smart collections in Jellyfin… <small>collections that follow a filter</small></button>
+      <button class="ghost" id="badgeBtn" role="menuitem">Poster badges… <small>4K, HDR, Atmos on your movie posters</small></button>
       <button class="ghost" id="bkBtn" role="menuitem">Backups… <small>your matches, edits and settings, day by day</small></button>
       <button class="ghost" id="keysBtn" role="menuitem">Keyboard shortcuts… <small>or press ?</small></button>
       <button class="ghost" id="logBtn" role="menuitem">Open the log file <small>for when something went wrong</small></button>
@@ -373,8 +405,8 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
 </main>
 
 <div id="ctx" class="ctx" role="menu" aria-label="Row actions" hidden></div>
-<dialog id="statsDlg" class="wide" aria-labelledby="stTitle"><div class="dlg">
-  <div class="head"><h2 id="stTitle" style="margin:0">Library stats</h2><p class="note" id="stSub" style="margin:4px 0 0">Click a row to show just those in the table.</p></div>
+<dialog id="statsDlg" class="wide" aria-labelledby="statsTitle"><div class="dlg">
+  <div class="head"><h2 id="statsTitle" style="margin:0">Library stats</h2><p class="note" id="stSub" style="margin:4px 0 0">Click a row to show just those in the table.</p></div>
   <div class="body" id="stBody"></div>
   <div class="foot"><button class="ghost" id="stClose">Close</button></div>
 </div></dialog>
@@ -382,6 +414,54 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
   <div class="head"><h2 id="bkTitle" style="margin:0">Backups</h2><p class="note" style="margin:4px 0 0">When the app starts, and once a day while it runs, it copies what you can't get back by scanning again: your matches, your metadata edits, rename undo, History and settings. It keeps the newest 10. API keys are never in a backup.</p></div>
   <div class="body" id="bkBody"></div>
   <div class="foot"><span class="grow" id="bkMsg" role="status"></span><button class="ghost" id="bkNow">Back up now</button><button class="ghost" id="bkClose">Close</button></div>
+</div></dialog>
+<dialog id="convDlg" class="wide" aria-labelledby="cvTitle"><div class="dlg">
+  <div class="head"><h2 id="cvTitle" style="margin:0">Convert to a smaller format</h2>
+    <p class="note" style="margin:4px 0 0">Re-encodes just the picture of older files (H.264, MPEG-4 and the like) to H.265 or AV1, keeping every audio and subtitle track, chapters and fonts. Only files with bitrate to spare are offered: converting a file that's already small loses detail for little gain. Each copy is checked before it replaces the original.</p>
+    <div class="cvopts">
+      <label>Format<select id="cvCodec"><option value="hevc">H.265 (plays almost everywhere)</option><option value="av1">AV1 (smallest; newer TVs and phones)</option></select></label>
+      <label>Quality<select id="cvQuality"><option value="high">High: looks the same</option><option value="balanced">Balanced</option><option value="small">Smaller files</option></select></label>
+      <label>Encode on<select id="cvEnc"><option value="auto">Automatic</option><option value="gpu">Graphics card</option><option value="cpu">Processor (slow)</option></select></label>
+      <label class="chk"><input type="checkbox" id="cvCheck"> Check quality after each file (VMAF)</label>
+    </div>
+    <p class="note" id="cvEncNote" style="margin:8px 0 0"></p></div>
+  <div class="body"><div id="cvRun"></div><div id="cvSum"></div><div id="cvList"></div></div>
+  <div class="foot"><span class="grow note" id="cvBin"></span><button class="ghost" id="cvStopAfter" hidden>Stop after this file</button><button class="ghost" id="cvStopNow" hidden>Stop now</button><button class="ghost" id="cvClose">Close</button><button id="cvGo" disabled>Convert</button></div>
+</div></dialog>
+<dialog id="smartDlg" class="wide" aria-labelledby="smTitle"><div class="dlg">
+  <div class="head"><h2 id="smTitle" style="margin:0">Smart collections in Jellyfin</h2>
+    <p class="note" style="margin:4px 0 0">Collections that follow a rule written like the filter box (<code>res:4k hdr:yes</code>, <code>rating:8 genre:crime</code>…), and optionally a TMDB list. The app keeps them up to date in Jellyfin, with a poster made from the first four. Removing one removes only the collection, never the movies or shows in it.</p></div>
+  <div class="body"><div id="smColl"></div>
+    <form id="smForm" class="smform" autocomplete="off">
+      <h3 id="smFormTitle">New smart collection</h3>
+      <div class="row"><label>Name<input id="smName" maxlength="80" placeholder="e.g. 4K HDR"></label>
+        <label>Of<select id="smKind"><option value="movies">Movies</option><option value="tv">TV shows</option></select></label></div>
+      <label>Rule<input id="smQuery" spellcheck="false" placeholder="e.g. res:4k hdr:yes   or   genre:horror year:1980-1989"></label>
+      <div class="presets note">Ideas: <span id="smPresets"></span> <button class="linkish" id="smUseFilter" type="button">use the current filter</button></div>
+      <label>Only titles on a TMDB list (optional)<input id="smTmdb" spellcheck="false" placeholder="https://www.themoviedb.org/list/…"></label>
+      <label class="chk"><input type="checkbox" id="smAuto" checked> Keep it up to date when the folder watcher finds new files</label>
+      <p id="smPrev" class="note" role="status" style="margin:0"></p>
+      <div><button type="submit" id="smSave">Create in Jellyfin</button> <button type="button" class="ghost" id="smCancel" hidden>Cancel editing</button></div>
+    </form></div>
+  <div class="foot"><span class="grow note" id="smMsg" role="status"></span><button class="ghost" id="smSync">Update all now</button><button class="ghost" id="smClose">Close</button></div>
+</div></dialog>
+<dialog id="badgeDlg" class="wide" aria-labelledby="bdTitle"><div class="dlg">
+  <div class="head"><h2 id="bdTitle" style="margin:0">Poster badges</h2>
+    <p class="note" style="margin:4px 0 0">Small labels on your movie posters for what each file holds, so you can tell copies apart at a glance in Jellyfin. The original posters are kept in the app folder, and <strong>Remove all badges</strong> puts every one back exactly as it was.</p></div>
+  <div class="body"><div class="bdgrid"><div>
+      <fieldset id="bdShow"><legend>Show</legend>
+        <label><input type="checkbox" value="resolution"> Resolution (4K, 1080p, SD)</label>
+        <label><input type="checkbox" value="hdr"> HDR or Dolby Vision</label>
+        <label><input type="checkbox" value="audio"> Best audio (Atmos, DTS:X, 7.1…)</label>
+        <label><input type="checkbox" value="rating"> Rating</label></fieldset>
+      <fieldset id="bdPos"><legend>Where</legend>
+        <label><input type="radio" name="bdpos" value="top"> Top</label><label><input type="radio" name="bdpos" value="bottom"> Bottom</label></fieldset>
+      <label>Preview with<select id="bdMovie"></select></label>
+      <label class="chk"><input type="checkbox" id="bdOn"> Add badges to new posters automatically</label>
+      <p class="note" id="bdCount"></p></div>
+    <div class="bdprev"><figure><img id="bdBefore" alt="The poster now"><figcaption>Now</figcaption></figure><figure><img id="bdAfter" alt="The poster with badges"><figcaption>With badges</figcaption></figure></div>
+  </div></div>
+  <div class="foot"><span class="grow note" id="bdMsg" role="status"></span><button class="ghost" id="bdRemove">Remove all badges</button><button class="ghost" id="bdClose">Close</button><button id="bdApply">Add badges to all posters</button></div>
 </div></dialog>
 <dialog id="keysDlg" aria-labelledby="kTitle"><div class="dlg">
   <div class="head"><h2 id="kTitle" style="margin:0">Keyboard shortcuts</h2></div>
@@ -527,11 +607,11 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
     <button class="ghost" id="jcClose">Close</button></div>
 </div></dialog>
 
-<dialog id="dupDlg" class="wide" aria-labelledby="dTitle"><div class="dlg">
-  <div class="head"><h2 id="dTitle">Duplicates</h2><div class="note" id="dSum"></div></div>
+<dialog id="dupDlg" class="wide" aria-labelledby="dupTitle"><div class="dlg">
+  <div class="head"><h2 id="dupTitle">Duplicates</h2><div class="note" id="dSum"></div></div>
   <div class="body" id="dList"></div>
   <div class="foot"><span class="grow note">Ticked copies go to the Recycle Bin with their own subtitles, .nfo and artwork. The weaker copies are ticked only when it's clearly safe; one copy of everything is always kept.</span>
-    <button class="ghost" id="dClose">Close</button><button id="dGo">Send ticked to Recycle Bin</button></div>
+    <button class="ghost" id="dupClose">Close</button><button id="dupGo">Send ticked to Recycle Bin</button></div>
 </div></dialog>
 
 <dialog id="leftDlg" class="wide" aria-labelledby="lTitle"><div class="dlg">
@@ -1547,8 +1627,8 @@ function renderDups(note){
 function dupCount(){
   const sel=$$("#dList [data-dup]:checked");
   const bytes=sel.reduce((a,c)=>a+dups.groups[c.dataset.g].copies.find(x=>x.id===c.dataset.dup).size,0);
-  $("#dGo").disabled=!sel.length;
-  $("#dGo").textContent=sel.length?`Send ${sel.length} ${sel.length===1?"copy":"copies"} to Recycle Bin (${size(bytes)})`:"Send ticked to Recycle Bin";
+  $("#dupGo").disabled=!sel.length;
+  $("#dupGo").textContent=sel.length?`Send ${sel.length} ${sel.length===1?"copy":"copies"} to Recycle Bin (${size(bytes)})`:"Send ticked to Recycle Bin";
 }
 $("#dList").onchange=e=>{
   const c=e.target.closest("[data-dup]");if(!c)return;
@@ -1562,11 +1642,11 @@ $("#dupBtn").onclick=async()=>{
     renderDups();$("#dupDlg").showModal()}
   catch(e){finish(e.message,true)}
 };
-$("#dClose").onclick=()=>$("#dupDlg").close();
-$("#dGo").onclick=async()=>{
+$("#dupClose").onclick=()=>$("#dupDlg").close();
+$("#dupGo").onclick=async()=>{
   const ids=$$("#dList [data-dup]:checked").map(c=>c.dataset.dup);
   if(!ids.length)return;
-  $("#dGo").disabled=true;
+  $("#dupGo").disabled=true;
   try{const d=await api("/api/dupes/recycle",{kind:mode==="tv"?"tv":"movies",ids});applyResult(d);
     const gone=new Set(d.recycled.map(p=>p.toLowerCase()));
     const n=dups.groups.flatMap(g=>g.copies).filter(c=>ids.includes(c.id)&&c.paths.every(p=>gone.has(p.toLowerCase()))).length;
@@ -1739,10 +1819,13 @@ function onPing(d){
     w.last_check&&`Last looked ${new Date(w.last_check*1000).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}.`,
     w.waiting&&w.waiting.length&&`Still arriving: ${w.waiting.slice(0,3).join(", ")}${w.waiting.length>3?"…":""}`,
     w.message&&`Last: ${w.message}`, w.error&&`Problem: ${w.error}`].filter(Boolean).join(" ");
+  const cv=d.convert,pill=$("#convPill");
+  if(cv){pill.hidden=false;pill.textContent=`Converting ${cv.name||""}${cv.phase==="converting"&&cv.percent!=null?` · ${Math.round(cv.percent)}%`:" · checking"}`}
+  else if(!pill.hidden){pill.hidden=true;loadLibrary()}
   const jf=d.jellyfin||{};
   if(jf.configured&&jf.time&&$("#jfMsg")&&!$("#jfMsg").innerHTML)$("#jfMsg").textContent=jf.error?`Last time: ${jf.error}`:
     `Last told Jellyfin ${new Date(jf.time*1000).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}: ${jf.full?"a library scan":plural(jf.folders,"folder")+" to refresh"}.`;
-  return w.busy;
+  return w.busy||!!cv;
 }
 async function ping(){
   let quick=false;
@@ -1963,7 +2046,8 @@ function ctxItems(id){
   return[["Details",()=>openRow(id),"Enter"],["Find on TMDB…",()=>openMatch(id),"M"],
     [tv?"Play the first episode":"Play",()=>playRow(id),"P"],["Open folder",()=>folderRow(id),"F"],
     jfOn&&["Show in Jellyfin",()=>jellyfinRow(id)],
-    [tv?"Copy folder path":"Copy file path",()=>copyPath(id)],"-",
+    [tv?"Copy folder path":"Copy file path",()=>copyPath(id)],
+    [tv?"Convert episodes to a smaller format…":"Convert to a smaller format…",()=>convertRow(id)],"-",
     [sel?"Deselect":"Select",()=>toggleSel(id),"Space"],
     sel&&selected.size>1&&[`Edit ${selected.size} selected…`,()=>$("#bulkBtn").click()],"-",
     [tv?"Delete show…":"Delete…",()=>deleteRow(id),"Del","danger"]].filter(Boolean);
@@ -2022,11 +2106,10 @@ function statsMovies(){
   const big=[...R].sort((a,b)=>b.size-a.size).slice(0,10);
   const cnt=(n,[c,sz])=>`${c} · ${size(sz)}`;
   return `<div class="tiles">${tile(R.length.toLocaleString(),"movies")}${tile(size(total),"on disk")}${tile(fmtLen(mins).replace(/ \d+ min$/,""),`to watch them all (${(mins/1440).toFixed(1)} days)`)}
-    ${tile(R.length?size(total/R.length):"–","average size")}${tile(dupSave+oldSize>0?size(dupSave+oldSize*.5):"Nothing","you could win back")}</div>
+    ${tile(R.length?size(total/R.length):"–","average size")}<div class="tile" id="stWin" data-dup="${dupSave}"><b>${dupSave>0?size(dupSave):"…"}</b><span>you could win back</span></div></div>
     <div class="win"><p><strong>Space you could win back</strong></p>
       <p>${dupes.length?`${plural(dupes.length,"movie")} ${dupes.length===1?"has":"have"} more than one copy; keeping only the biggest of each frees <strong>${size(dupSave)}</strong>. <button type="button" class="linkish" data-q="dup:yes">Show them</button> or use Tools → Find duplicates.`:"No movie has a second copy."}</p>
-      <p>${old.length?`${plural(old.length,"file")} use${old.length===1?"s":""} an older video format (H.264, MPEG-4 and the like), taking ${size(oldSize)}. Converting them to H.265 usually halves that: about <strong>${size(oldSize*.5)}</strong>. <button type="button" class="linkish" data-q="-codec:hevc -codec:av1">Show them</button>`:"Every file already uses an efficient format (H.265 or AV1)."}</p>
-      ${old.length?`<p class="note">Biggest of those: ${old.slice(0,5).map(r=>`${esc(label(r))} (${size(r.size)})`).join(", ")}.</p>`:""}</div>
+      <p id="stConv">${old.length?`${plural(old.length,"file")} use${old.length===1?"s":""} an older video format (H.264, MPEG-4 and the like), taking ${size(oldSize)}. <span class="note">Working out which are worth converting…</span>`:"Every file already uses an efficient format (H.265 or AV1)."}</p></div>
     <div class="stgrid">
       <div><h3>Resolution</h3>${bars(res.map(([k,v])=>[k,v[1],v]),(v,e)=>cnt(0,e),k=>k==="Unknown"?"":`res:${parseInt(k)}`)}</div>
       <div><h3>Video format</h3>${bars(codecs.map(([k,v])=>[k,v[1],v]),(v,e)=>cnt(0,e),k=>k==="Unknown"?"":`codec:${nz(k)}`)}</div>
@@ -2056,8 +2139,9 @@ function statsTv(){
 }
 $("#statsBtn").onclick=()=>{
   $("#toolsMenu").open=false;
-  $("#stTitle").textContent=mode==="tv"?"TV library stats":"Movie library stats";
+  $("#statsTitle").textContent=mode==="tv"?"TV library stats":"Movie library stats";
   $("#stBody").innerHTML=rows.length?(mode==="tv"?statsTv():statsMovies()):'<p class="note">Scan your library first.</p>';
+  if(mode!=="tv"&&rows.length)fillConvStats();
   $("#statsDlg").showModal();
 };
 $("#stBody").onclick=e=>{const b=e.target.closest("[data-q]");if(!b)return;
@@ -2096,6 +2180,192 @@ $("#logBtn").onclick=async()=>{$("#toolsMenu").open=false;try{await api("/api/lo
 $("#wNotifyTest").onclick=async()=>{try{await api("/api/notify/test",{});$("#wMsg").textContent="Sent a test notification. If none appeared, check Windows Settings → System → Notifications (and Do not disturb)."}catch(e){$("#wMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}};
 
 applyMode();
+/* ---------- convert to a smaller format (H.265 / AV1) ---------- */
+let cvData=null,cvInfo=null,cvTimer=null,cvPick=null,cvLast=null,cvWasRunning=false;
+const kbps=k=>k>=1000?(k/1000).toFixed(1)+" Mb/s":k+" kb/s";
+const resName=(w,h)=>!w?"":w>=3200||h>=1800?"4K":w>=1800||h>=1000?"1080p":w>=1200||h>=700?"720p":h+"p";
+const CODEC_NAME={h264:"H.264",mpeg4:"MPEG-4",mpeg2video:"MPEG-2",mpeg1video:"MPEG-1",vc1:"VC-1",wmv3:"WMV",msmpeg4v3:"DivX",hevc:"H.265",av1:"AV1",vp9:"VP9"};
+const fmtEta=s=>s>=3600?`${Math.floor(s/3600)} h ${Math.round(s%3600/60)} min`:s>=60?`${Math.round(s/60)} min`:`${s} s`;
+async function openConvert(pick){
+  $("#toolsMenu").open=false;cvPick=pick||null;
+  $("#cvList").innerHTML='<p class="note">Working out which files are worth converting…</p>';$("#cvSum").innerHTML="";$("#cvRun").innerHTML="";$("#cvEncNote").textContent="";
+  $("#convDlg").showModal();
+  try{cvInfo=await api("/api/convert");
+    const s=cvInfo.settings;$("#cvCodec").value=s.codec;$("#cvQuality").value=s.quality;$("#cvEnc").value=s.encoder;$("#cvCheck").checked=s.check;
+    $("#cvCodec option[value=av1]").disabled=!cvInfo.encoders.av1.length;
+    cvEncNote();cvBinNote();showConvStatus(cvInfo.status);
+    await loadCandidates();
+  }catch(e){$("#cvList").innerHTML=`<p class="note">${esc(e.message)}</p>`}
+}
+function cvEncNote(){
+  const list=cvInfo.encoders[$("#cvCodec").value]||[],pref=$("#cvEnc").value;
+  const e=list.find(x=>pref==="cpu"?x.id.startsWith("lib"):pref==="gpu"?!x.id.startsWith("lib"):true);
+  $("#cvEncNote").textContent=!e?($("#cvCodec").value==="av1"?"AV1 needs a recent graphics card (NVIDIA RTX 40, Intel Arc or AMD RX 7000 and newer).":"That can't be used on this computer."):
+    e.id.startsWith("lib")?"Uses the processor: good quality, but slow (an hour or more for a 2-hour 1080p movie).":`Uses ${e.label}: fast, about 10 minutes for a 2-hour 1080p movie.`;
+}
+function cvBinNote(){
+  $("#cvBin").textContent="Originals go to the Recycle Bin, so the space comes back once you empty it. "+(cvInfo.bins||[]).map(x=>x.capacity===0?`${x.drive} has its Recycle Bin switched off, so nothing there can be converted safely.`:x.capacity?`${x.drive}'s Recycle Bin holds ${size(x.capacity)}; when it's full, Windows removes the oldest items first.`:"").join(" ");
+}
+async function loadCandidates(){
+  const d=await api("/api/convert/candidates?kind="+(mode==="tv"?"tv":"movies"));cvData=d;
+  const worth=d.files.filter(f=>f.worth),rest=d.files.filter(f=>!f.worth&&f.codec&&!/^(hevc|av1|vp9)$/.test(f.codec));
+  const picked=f=>!f.queued&&(cvPick?cvPick(f):true),what=mode==="tv"?"episode":"file";
+  let intro=d.old?`<p>${plural(d.old,what)} use${d.old===1?"s":""} an older format (${size(d.old_size)}). ${d.worth?`<strong>${d.worth}</strong> ${d.worth===1?"has":"have"} bitrate to spare: converting ${d.worth===1?"it":"them"} frees about <strong>${size(d.saved)}</strong> (${size(d.size)} now, about ${size(d.after)} after). The rest are already small for their picture size.`:"None has enough bitrate to spare to be worth converting: they're already small for their picture size."}</p>`:"<p>Every file already uses an efficient format (H.265, AV1 or VP9).</p>";
+  if(cvPick&&!worth.some(cvPick)){const f=d.files.find(cvPick);intro=`<p class="note"><strong>${f?`${esc(f.name)} isn't worth converting: ${esc(f.reason||"")}`:"Nothing there is worth converting"}.</strong></p>`+intro}
+  $("#cvSum").innerHTML=intro;
+  const row=(f,box)=>`<tr>${box?`<td><input type="checkbox" data-cv="${esc(f.path)}" ${picked(f)?"checked":""} ${f.queued?"disabled":""} aria-label="Convert ${esc(f.name)}"></td>`:""}<td>${esc(f.name)}${f.queued?' <span class="tag n">in the list</span>':""}<div class="sub">${esc([resName(f.width,f.height),CODEC_NAME[f.codec]||(f.codec||"").toUpperCase(),f.video_kbps&&kbps(f.video_kbps)].filter(Boolean).join(" · "))}</div></td><td class="n">${size(f.size)}</td>${box?`<td class="n">about ${size(f.after)}</td><td class="n"><strong>${size(f.saved)}</strong></td>`:`<td>${esc(f.reason)}</td>`}</tr>`;
+  $("#cvList").innerHTML=(worth.length?`<table class="cvtbl"><thead><tr><th style="width:1%"><input type="checkbox" id="cvAll" aria-label="Select all"></th><th>${mode==="tv"?"Episode":"Movie"}</th><th class="n">Now</th><th class="n">After</th><th class="n">Saves</th></tr></thead><tbody>${worth.map(f=>row(f,true)).join("")}</tbody></table>`:"")
+    +(rest.length?`<details style="margin-top:12px"><summary>${plural(rest.length,what)} not worth converting</summary><table class="cvtbl"><tbody>${rest.slice(0,500).map(f=>row(f,false)).join("")}</tbody></table></details>`:"");
+  cvCount();
+}
+function cvCount(){
+  if(!cvData)return;
+  const sel=$$("#cvList [data-cv]:checked"),files=sel.map(b=>cvData.files.find(f=>f.path===b.dataset.cv)).filter(Boolean);
+  $("#cvGo").disabled=!sel.length;
+  $("#cvGo").textContent=sel.length?`${cvLast&&cvLast.running?"Add":"Convert"} ${plural(sel.length,"file")} (saves about ${size(files.reduce((a,f)=>a+f.saved,0))})`:"Convert";
+  const all=$("#cvAll"),bs=$$("#cvList [data-cv]:not(:disabled)");if(all)all.checked=bs.length>0&&bs.every(b=>b.checked);
+}
+$("#cvList").addEventListener("change",e=>{if(e.target.id==="cvAll")$$("#cvList [data-cv]:not(:disabled)").forEach(b=>b.checked=e.target.checked);cvCount()});
+["#cvCodec","#cvQuality","#cvEnc","#cvCheck"].forEach(sel=>$(sel).onchange=async()=>{
+  try{await api("/api/convert/settings",{codec:$("#cvCodec").value,quality:$("#cvQuality").value,encoder:$("#cvEnc").value,check:$("#cvCheck").checked});
+    cvEncNote();if(sel==="#cvCodec"||sel==="#cvQuality")await loadCandidates()}catch(e){$("#cvEncNote").textContent=e.message}});
+$("#cvGo").onclick=async()=>{
+  const paths=$$("#cvList [data-cv]:checked").map(b=>b.dataset.cv);if(!paths.length)return;
+  $("#cvGo").disabled=true;$("#cvGo").textContent="Starting…";
+  try{showConvStatus(await api("/api/convert/queue",{paths,kind:mode==="tv"?"tv":"movies",start:true}));cvPick=null;await loadCandidates()}
+  catch(e){$("#cvEncNote").textContent=e.message;cvCount()}
+};
+function showConvStatus(st){
+  cvLast=st;const c=st.current,others=st.queue.length-(st.running&&c?1:0);
+  $("#cvStopAfter").hidden=$("#cvStopNow").hidden=!st.running;
+  const phase={starting:"Starting",converting:"Converting",checking:"Checking the copy",quality:"Comparing samples with the original",swapping:"Putting the new copy in place"};
+  const res=st.results.slice(0,8);
+  $("#cvRun").innerHTML=(st.running||st.queue.length||res.length)?`<div class="cvrun">${st.running&&c?`<div><strong>${esc(c.name)}</strong> · ${phase[c.phase]||c.phase}${c.phase==="converting"?` ${Math.round(c.percent)}%${c.speed?` · ${c.speed.toFixed(1)}× real time`:""}${c.eta!=null?` · about ${fmtEta(c.eta)} left`:""}`:"…"}</div><div class="cvbar" role="progressbar" aria-valuenow="${Math.round(c.percent||0)}" aria-valuemin="0" aria-valuemax="100"><span style="width:${c.phase==="converting"?c.percent:100}%"></span></div>`:st.running?"<div>Starting…</div>":""}
+    ${others>0?`<div class="note">${plural(others,"more file")} waiting.${st.running?(st.stop==="after"?" Stopping after this file.":" You can close this page; the app keeps going and your PC stays awake."):` <button class="ghost small" id="cvResume" type="button">Start</button> <button class="ghost small" id="cvClear" type="button">Clear the list</button>`}</div>`:st.running?`<div class="note">${st.stop==="after"?"Stopping after this file.":"You can close this page; the app keeps going and your PC stays awake."}</div>`:""}
+    ${res.length?`<ul class="cvres">${res.map(r=>`<li class="${r.ok?"ok":r.kept?"kept":"bad"}">${r.ok?"✓":r.kept?"–":"⚠"} ${esc(r.name)}: ${r.ok?`saved ${size(r.saved)} (${size(r.before)} → ${size(r.after)})${r.vmaf!=null?`, quality score ${r.vmaf}`:""}`:esc(r.reason)}</li>`).join("")}</ul>`:""}</div>`:"";
+  clearTimeout(cvTimer);
+  if(st.running&&$("#convDlg").open)cvTimer=setTimeout(async()=>{try{showConvStatus(await api("/api/convert/status"))}catch{}},1500);
+  if(cvWasRunning&&!st.running&&$("#convDlg").open)loadCandidates().catch(()=>{});
+  cvWasRunning=st.running;cvCount();
+}
+$("#cvRun").addEventListener("click",async e=>{
+  try{if(e.target.id==="cvResume")showConvStatus(await api("/api/convert/start"));
+    if(e.target.id==="cvClear"){showConvStatus(await api("/api/convert/remove",{}));await loadCandidates()}}
+  catch(err){$("#cvEncNote").textContent=err.message}
+});
+$("#cvStopAfter").onclick=async()=>showConvStatus(await api("/api/convert/stop",{now:false}));
+$("#cvStopNow").onclick=async()=>{if(confirm("Stop converting now?\n\nThe file being converted is left exactly as it was, and stays first in the list."))showConvStatus(await api("/api/convert/stop",{now:true}))};
+$("#cvClose").onclick=()=>{$("#convDlg").close();clearTimeout(cvTimer)};
+$("#convBtn").onclick=()=>openConvert();
+$("#convPill").onclick=()=>openConvert();
+function convertRow(id){
+  const r=rows.find(x=>x.id===id);if(!r)return;
+  const tail=(mode==="tv"?r.folder:r.path).toLowerCase();
+  openConvert(f=>{const p=f.path.toLowerCase();return mode==="tv"?p.includes("\\"+tail+"\\"):p.endsWith("\\"+tail)});
+}
+async function fillConvStats(){
+  try{const d=await api("/api/convert/candidates?kind=movies"),w=d.files.filter(f=>f.worth),el=$("#stConv");if(!el)return;
+    el.innerHTML=d.old?`${plural(d.old,"file")} use${d.old===1?"s":""} an older video format (H.264, MPEG-4 and the like), taking ${size(d.old_size)}. `+(w.length?`Converting the ${plural(w.length,"file")} with bitrate to spare to H.265 would free about <strong>${size(d.saved)}</strong> (the biggest wins: ${w.slice(0,4).map(f=>`${esc(f.name)}, ${size(f.saved)}`).join("; ")}). The rest are already small for their picture size, so converting them would cost quality for little gain. <button type="button" class="linkish" data-conv>Convert…</button>`
+      :"They're all already small for their picture size, so converting them would cost quality for little gain."):"Every file already uses an efficient format (H.265 or AV1).";
+    const t=$("#stWin");if(t){const tot=(+t.dataset.dup||0)+d.saved;t.querySelector("b").textContent=tot>0?size(tot):"Nothing"}
+  }catch{const el=$("#stConv .note");if(el)el.textContent=""}
+}
+$("#stBody").addEventListener("click",e=>{if(e.target.closest("[data-conv]")){$("#statsDlg").close();openConvert()}});
+
+/* ---------- smart collections in Jellyfin ---------- */
+let smEditing=null,smTimer=null;
+async function openSmart(){
+  $("#toolsMenu").open=false;$("#smMsg").textContent="";smReset();$("#smColl").innerHTML='<p class="note">Loading…</p>';$("#smartDlg").showModal();
+  try{const d=await api("/api/smart");smShow(d.collections);$("#smPresets")._p=d.presets;
+    $("#smPresets").innerHTML=d.presets.map((p,i)=>`<button type="button" class="ghost small" data-preset="${i}">${esc(p.name)}</button>`).join(" ");
+    if(!d.jellyfin)$("#smMsg").textContent="Add your Jellyfin address and API key in Settings first.";
+  }catch(e){$("#smMsg").textContent=e.message}
+}
+function smShow(list){
+  $("#smColl")._list=list;
+  $("#smColl").innerHTML=list.length?list.map(c=>`<div class="smitem"><div class="grow"><strong>${esc(c.name)}</strong> <span class="note">${c.kind==="tv"?"TV shows":"Movies"}</span>
+    <div><code>${esc(c.query||"(everything)")}</code>${c.tmdb_list?` <span class="note">on TMDB list ${esc(c.tmdb_list)}</span>`:""}</div>
+    <div class="note">${c.error?`⚠ ${esc(c.error)}`:`${plural(c.count||0,c.kind==="tv"?"show":"movie")} in Jellyfin${c.waiting?` · ${c.waiting} not in Jellyfin yet`:""}${c.synced?` · updated ${new Date(c.synced*1000).toLocaleString([],{dateStyle:"medium",timeStyle:"short"})}`:""}${c.auto!==false?" · kept up to date":""}`}</div></div>
+    <button class="ghost small" type="button" data-smedit="${esc(c.id)}">Edit</button><button class="ghost small" type="button" data-smdel="${esc(c.id)}">Remove…</button></div>`).join("")
+    :'<p class="note">No smart collections yet. Make one below, or start from one of the ideas.</p>';
+}
+function smReset(){
+  smEditing=null;$("#smFormTitle").textContent="New smart collection";$("#smName").value="";$("#smQuery").value="";$("#smTmdb").value="";
+  $("#smKind").value=mode==="tv"?"tv":"movies";$("#smAuto").checked=true;$("#smSave").textContent="Create in Jellyfin";$("#smCancel").hidden=true;$("#smPrev").textContent="";
+}
+function smPreview(){clearTimeout(smTimer);smTimer=setTimeout(async()=>{
+  const q=$("#smQuery").value.trim(),l=$("#smTmdb").value.trim(),kind=$("#smKind").value;if(!q&&!l){$("#smPrev").textContent="";return}
+  $("#smPrev").textContent="Checking…";
+  try{const d=await api("/api/smart/preview",{kind,query:q,tmdb_list:l});
+    $("#smPrev").innerHTML=(d.unknown.length?`⚠ “${esc(d.unknown[0])}:” isn't a filter field. `:"")+`Picks <strong>${plural(d.count,kind==="tv"?"show":"movie")}</strong>${d.count?": "+esc(d.names.slice(0,12).join(", "))+(d.count>12?"…":""):"."}`}
+  catch(e){$("#smPrev").textContent=e.message}},350)}
+["#smQuery","#smTmdb"].forEach(sel=>$(sel).addEventListener("input",smPreview));$("#smKind").onchange=smPreview;
+$("#smPresets").onclick=e=>{const b=e.target.closest("[data-preset]");if(!b)return;const p=$("#smPresets")._p[b.dataset.preset];
+  if(!smEditing)$("#smName").value=p.name;$("#smKind").value=p.kind;$("#smQuery").value=p.query;smPreview()};
+$("#smUseFilter").onclick=()=>{$("#smQuery").value=$("#filter").value.trim();$("#smKind").value=mode==="tv"?"tv":"movies";smPreview();$("#smQuery").focus()};
+$("#smForm").onsubmit=async e=>{e.preventDefault();const done=busy($("#smSave"),"Saving in Jellyfin…");
+  try{const d=await api("/api/smart/save",{id:smEditing,name:$("#smName").value,kind:$("#smKind").value,query:$("#smQuery").value,tmdb_list:$("#smTmdb").value,auto:$("#smAuto").checked});
+    smShow(d.collections);const r=d.result,c=d.collection;done();smReset();
+    $("#smMsg").textContent=`“${c.name}” is in Jellyfin with ${plural(r.in,c.kind==="tv"?"show":"movie")}`+(r.waiting_count?`; ${r.waiting_count} more will join once Jellyfin has them (${r.waiting.slice(0,3).join(", ")}${r.waiting_count>3?"…":""}).`:".")}
+  catch(err){done();$("#smMsg").textContent=err.message}};
+$("#smCancel").onclick=smReset;
+$("#smColl").onclick=async e=>{
+  const ed=e.target.closest("[data-smedit]"),del=e.target.closest("[data-smdel]"),list=$("#smColl")._list||[];
+  if(ed){const c=list.find(x=>x.id===ed.dataset.smedit);if(!c)return;smEditing=c.id;$("#smFormTitle").textContent=`Edit “${c.name}”`;
+    $("#smName").value=c.name;$("#smKind").value=c.kind;$("#smQuery").value=c.query||"";$("#smTmdb").value=c.tmdb_list||"";$("#smAuto").checked=c.auto!==false;
+    $("#smSave").textContent="Save and update Jellyfin";$("#smCancel").hidden=false;smPreview();$("#smName").focus()}
+  if(del){const c=list.find(x=>x.id===del.dataset.smdel);if(!c)return;
+    if(!confirm(`Remove the smart collection “${c.name}”?\n\nThe collection is removed from Jellyfin. The movies and shows in it are not touched.`))return;
+    try{const d=await api("/api/smart/delete",{id:c.id});smShow(d.collections);$("#smMsg").textContent=`Removed “${c.name}” from Jellyfin.`;if(smEditing===c.id)smReset()}
+    catch(err){$("#smMsg").textContent=err.message}}
+};
+$("#smSync").onclick=async()=>{const done=busy($("#smSync"),"Updating…");
+  try{const d=await api("/api/smart/sync",{});smShow(d.collections);const errs=Object.values(d.results).filter(r=>r.error);
+    $("#smMsg").textContent=errs.length?errs[0].error:Object.keys(d.results).length?"All smart collections are up to date in Jellyfin.":"No smart collections to update yet."}
+  catch(e){$("#smMsg").textContent=e.message}finally{done()}};
+$("#smClose").onclick=()=>$("#smartDlg").close();
+$("#smartBtn").onclick=openSmart;
+
+/* ---------- poster badges ---------- */
+let bdTimer=null;
+function bdState(){return{on:$("#bdOn").checked,position:($("#bdPos input:checked")||{}).value||"top",show:Object.fromEntries($$("#bdShow input").map(b=>[b.value,b.checked]))}}
+function bdPreview(){
+  const id=$("#bdMovie").value;if(!id){$("#bdBefore").removeAttribute("src");$("#bdAfter").removeAttribute("src");return}
+  const s=bdState(),q=new URLSearchParams({id,position:s.position,t:Date.now()});Object.entries(s.show).forEach(([k,v])=>q.set(k,v?"1":"0"));
+  $("#bdAfter").src="/api/badges/preview?"+q;q.set("plain","1");$("#bdBefore").src="/api/badges/preview?"+q;
+}
+const bdCount=n=>{$("#bdCount").textContent=n?`Badges are on ${plural(n,"poster")} now.`:"No posters have badges yet."};
+function bdSave(){clearTimeout(bdTimer);bdTimer=setTimeout(async()=>{try{bdCount((await api("/api/badges/settings",bdState())).count)}catch(e){$("#bdMsg").textContent=e.message}},250);bdPreview()}
+async function openBadges(){
+  $("#toolsMenu").open=false;$("#bdMsg").textContent="";
+  if(mode==="tv"){status("Poster badges are for movie posters. Switch to Movies to add them.");return}
+  try{const d=await api("/api/badges"),s=d.settings;
+    $("#bdOn").checked=s.on;$$("#bdShow input").forEach(b=>b.checked=!!s.show[b.value]);$$("#bdPos input").forEach(b=>b.checked=b.value===s.position);bdCount(d.count);
+    const score=r=>{const i=I(r);return(parseInt(r.resolution)>=2000?4:0)+(i.hdr?3:0)+(/Atmos|DTS/.test(i.audio||"")?2:0)+(i.rating?1:0)};
+    const withArt=rows.filter(r=>(r.files||{}).art).sort((a,b)=>score(b)-score(a)||String(a.title).localeCompare(String(b.title))).slice(0,80);
+    $("#bdMovie").innerHTML=withArt.map(r=>`<option value="${esc(r.id)}">${esc(r.match&&r.match.name||r.title)}</option>`).join("");
+    $("#bdApply").disabled=!withArt.length;if(!withArt.length)$("#bdMsg").textContent="None of your movies has a poster yet. Download artwork first.";
+    $("#badgeDlg").showModal();bdPreview();
+  }catch(e){status(e.message,true)}
+}
+$("#bdShow").onchange=bdSave;$("#bdPos").onchange=bdSave;$("#bdOn").onchange=bdSave;$("#bdMovie").onchange=bdPreview;
+$("#bdApply").onclick=async()=>{
+  try{await api("/api/badges/settings",bdState())}catch(e){$("#bdMsg").textContent=e.message;return}
+  $("#badgeDlg").close();
+  try{const r=await runJob("/api/badges/apply",{},"Adding badges to posters",true);
+    finish(`Poster badges: ${plural(r.changed,"poster")} updated${r.same?`, ${r.same} already right`:""}${r.failed.length?`, ${r.failed.length} couldn't be read`:""}. Jellyfin has been told.`)}
+  catch(e){finish(e.message,true)}
+};
+$("#bdRemove").onclick=async()=>{
+  if(!confirm("Put back the original posters, without badges, everywhere?\n\nAdding badges to new posters is switched off too."))return;
+  try{await api("/api/badges/settings",{...bdState(),on:false})}catch{}
+  $("#badgeDlg").close();
+  try{const r=await runJob("/api/badges/remove",{},"Removing badges",true);finish(`${plural(r.restored,"poster")} put back as ${r.restored===1?"it was":"they were"}.`)}
+  catch(e){finish(e.message,true)}
+};
+$("#bdClose").onclick=()=>$("#badgeDlg").close();
+$("#badgeBtn").onclick=openBadges;
+
 loadLibrary();
 fetch("/api/config").then(r=>r.json()).then(c=>{const f=mode==="tv"?c.tv_folder:c.folder;if(f&&!$("#folder").value)$("#folder").value=f;showSettings(c);showFolders(c);if(!c.has_key)$("#setMsg").innerHTML+=" <strong>Add your key to start matching.</strong>"}).catch(()=>{});
 </script>

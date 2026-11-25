@@ -35,6 +35,9 @@ Open **Settings** and paste a free TMDB API key (themoviedb.org → Settings →
 | **Library stats** | Size by resolution and format, audio, HDR, decades, genres, the biggest files, and how much space removing duplicates or converting older formats would free. |
 | **Backups** | Your matches, edits, rename undo, History and settings are copied when the app starts and daily (newest 10 kept), with **Restore** under Tools → Backups. |
 | **Notifications** | A Windows notification when the folder watcher has handled new files. |
+| **Convert to a smaller format** | Older files (H.264, MPEG-4, MPEG-2, VC-1…) to H.265 or AV1, on the graphics card when it can, keeping every audio and subtitle track. Only files with bitrate to spare are offered, each copy is checked (length, tracks, and a VMAF quality score on samples) before it replaces the original, and the original goes to the Recycle Bin. Runs in the background, keeps the PC awake, and keeps going after the page is closed. |
+| **Smart collections** | Jellyfin collections that follow a rule written like the filter box (`res:4k hdr:yes`, `rating:8 genre:crime`), optionally limited to a TMDB list. Kept up to date as new files arrive, each with a poster made from its first four. |
+| **Poster badges** | 4K, HDR / Dolby Vision, Atmos / DTS:X / 7.1 and the rating on movie posters. The originals are kept, and **Remove all badges** puts them back exactly. |
 
 ## Safety
 
@@ -43,6 +46,8 @@ Open **Settings** and paste a free TMDB API key (themoviedb.org → Settings →
   long or items too big for the bin would otherwise be deleted for good).
 * The last copy of a movie or episode is never recycled by the duplicates tool.
 * Every change is listed under Tools → History, with Restore and Move back.
+* A converted video replaces its original only after the copy has been checked; Restore in History brings the
+  original back (and sends the converted copy to the Recycle Bin).
 * API keys and passwords are kept in **Windows Credential Manager** (encrypted with your Windows login), not in
   `config.json`; the app moves them there when it starts. They're listed there as `media-manager/...`.
 * The app's window shows only actions and problems; `logs\media-manager.log` keeps the details.
