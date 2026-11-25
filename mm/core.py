@@ -218,7 +218,62 @@ def discard(path: Path) -> None:
         from send2trash import send2trash
     except ImportError:
         raise UserError("Deleting needs a new library. Close the app and run run.bat again to install it.")
+    # Windows deletes for good, without asking, anything the Recycle Bin can't take: paths over 260 characters,
+    # or more than the bin holds. Check first, so "to the Recycle Bin" always means restorable.
+    size, longest = tree_stats(path)
+    cap = recycle_capacity(path)
+    if cap is not None and size > cap:
+        raise UserError(f"“{path.name}” is {size / 1e9:.1f} GB, more than this drive's Recycle Bin holds ({cap / 1e9:.1f} GB), "
+                        "so Windows would delete it for good. Delete it in File Explorer if you're sure, or make the Recycle Bin bigger.")
+    if longest >= MAX_BIN_PATH:  # move it up to a short name at the top of the same drive first (instant, same drive)
+        short = Path(os.path.splitdrive(str(path.resolve()))[0] + os.sep) / f"~mm-recycle-{time.time_ns() % 10**9}{path.suffix}"
+        if longest - len(str(path)) + len(str(short)) >= MAX_BIN_PATH:
+            raise UserError(f"“{path.name}” has paths too long for the Recycle Bin, so Windows would delete it for good. "
+                            "Delete it in File Explorer if you're sure.")
+        os.rename(path, short)
+        path = short
     send2trash(str(path))
+
+
+MAX_BIN_PATH = 259  # Windows' MAX_PATH (260) less the terminating character
+
+
+def tree_stats(path: Path):
+    """(total bytes, longest full path) of a file or a folder and everything inside it."""
+    if not path.is_dir():
+        return path.stat().st_size, len(str(path))
+    size, longest = 0, len(str(path))
+    for root, dirs, files in os.walk(path):
+        for n in dirs + files:
+            full = os.path.join(root, n)
+            longest = max(longest, len(full))
+            if n in files:
+                try:
+                    size += os.stat(full).st_size
+                except OSError:
+                    pass
+    return size, longest
+
+
+def recycle_capacity(path: Path):
+    """Bytes this drive's Recycle Bin holds (Windows' per-drive setting), or None if unknown."""
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes
+        import winreg
+        buf = ctypes.create_unicode_buffer(64)
+        drive = os.path.splitdrive(str(path.resolve()))[0] + "\\"
+        if not ctypes.windll.kernel32.GetVolumeNameForVolumeMountPointW(drive, buf, 64):
+            return None
+        guid = buf.value[buf.value.index("{"):buf.value.index("}") + 1]
+        key = rf"Software\Microsoft\Windows\CurrentVersion\Explorer\BitBucket\Volume\{guid}"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as k:
+            if winreg.QueryValueEx(k, "NukeOnDelete")[0]:
+                return 0  # the Recycle Bin is switched off for this drive
+            return int(winreg.QueryValueEx(k, "MaxCapacity")[0]) * 1024 * 1024
+    except (OSError, ValueError, ImportError):
+        return None
 
 
 def ffmpeg_exe() -> str:

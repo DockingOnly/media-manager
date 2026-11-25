@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 from flask import Flask, Response, jsonify, request
 
-from . import artwork, bulk, collections, core, export, library, movie, nfo, renamer, subtitles, tmdbapi, trailers, trakt
+from . import artwork, bulk, collections, core, export, leftovers, library, movie, nfo, renamer, subtitles, tmdbapi, trailers, trakt
 from .core import UserError
 
 app = Flask(__name__, static_folder=str(core.BASE / "static"), static_url_path="")
@@ -169,6 +169,23 @@ def api_trakt_sync():
         return job_response("trakt", "Asking Trakt", 0, lambda job: trakt.sync_tv(job, root, clear))
     root = core.require_scan()
     return job_response("trakt", "Asking Trakt", 0, lambda job: trakt.sync_movies(job, root, clear))
+
+
+def leftover_root(kind: str) -> Path:
+    return core.require_tv_scan() if kind == "tv" else core.require_scan()
+
+
+@app.get("/api/leftovers")
+def api_leftovers():
+    return jsonify(leftovers.find(leftover_root(request.args.get("kind", "movies"))))
+
+
+@app.post("/api/leftovers/recycle")
+def api_leftovers_recycle():
+    d = body()
+    root = leftover_root(d.get("kind", "movies"))
+    with core.lock:
+        return jsonify(leftovers.recycle(root, [str(p) for p in d.get("paths") or []]))
 
 
 @app.post("/api/folders/forget")

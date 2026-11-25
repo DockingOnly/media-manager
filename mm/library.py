@@ -25,7 +25,7 @@ def skip_dir(name: str) -> bool:
 # Files next to a movie that share its name and belong to it
 SIDECAR_EXTS = core.SUB_EXTS | {".nfo", ".jpg", ".jpeg", ".png", ".webp"}
 
-PARSE_VERSION = 2  # bump when parsing changes, so saved scans are re-read
+PARSE_VERSION = 3  # bump when parsing changes, so saved scans are re-read
 GUESS_OPTS = {"type": "movie", "excludes": ["part"]}  # "Part 2" in a title is a sequel, not disc 2
 SPLIT_PART = re.compile(r"(?P<sep>\s-\s|-|[._ ])(?:cd|dvd|disc|disk|part|pt)[ ._-]?(?P<n>\d{1,2})$", re.I)
 VIDEO_STREAM = re.compile(r"Stream #\d+:\d+[^\n]*?: Video: (\w+)[^\n]*?, (\d{2,5})x(\d{2,5})")
@@ -117,10 +117,13 @@ def scan(root: Path, job: dict = None, label: str = "Reading file names") -> lis
             item = {k: v for k, v in old.items() if k not in ("match", "files", "named")}
         else:
             item = parse(path, root)
-        if not item["resolution"] and not item.get("probed"):  # the name doesn't say: ask the video
-            info = probe_video(path)
-            item["resolution"] = info.get("resolution", "")
-            item["codec"] = item["codec"] or info.get("codec", "")
+        if not item.get("probed"):  # ask the video itself (once per file): release names can be wrong
+            info = probe_video(path)  # ('Star Wars 360p' that is really 640x272)
+            if info.get("resolution"):
+                if item["resolution"] and item["resolution"] != info["resolution"]:
+                    item["name_resolution"] = item["resolution"]
+                item["resolution"] = info["resolution"]
+            item["codec"] = info.get("codec") or item["codec"]
             item["probed"] = True
         item["size"] = st.st_size
         item["mtime"] = int(st.st_mtime)

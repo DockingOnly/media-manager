@@ -254,6 +254,7 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
   <button class="ghost" id="nfoBtn">Write .nfo files…</button>
   <button class="ghost" id="artBtn">Download artwork…</button>
   <button class="ghost" id="collBtn">Collections…</button>
+  <button class="ghost" id="leftBtn">Tidy leftovers…</button>
   <button id="bulkBtn" hidden>Edit selected…</button>
   <button class="ghost" id="traktBtn" hidden>Sync watched from Trakt…</button>
   <span class="export-wrap"><select id="exportKind" aria-label="What to export">
@@ -382,6 +383,14 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
     <p class="note full" style="margin:0">Each title's .nfo is updated (everything else in it is kept) and locked so Jellyfin keeps the change. Titles without a confirmed match are skipped.</p>
   </div>
   <div class="foot"><button class="ghost" id="bClose">Cancel</button><button id="bGo">Apply</button></div>
+</div></dialog>
+
+<dialog id="leftDlg" class="wide" aria-labelledby="lTitle"><div class="dlg">
+  <div class="head"><h2 id="lTitle">Leftovers</h2><div class="note" id="lSum"></div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="lAll" checked> Select all</label></div>
+  <div class="body"><ul class="plain" id="lList" style="list-style:none;padding:0;margin:0"></ul></div>
+  <div class="foot"><span class="grow note">Folders that hold no movie or episode any more (only artwork, .nfo, subtitles, trailers, samples or tracker files), and tracker junk files. Anything holding a video, or a file of another kind, is never listed. Chosen items go to the Recycle Bin.</span>
+    <button class="ghost" id="lClose">Close</button><button id="lGo">Send to Recycle Bin</button></div>
 </div></dialog>
 
 <dialog id="collDlg" class="wide" aria-labelledby="cTitle"><div class="dlg">
@@ -1106,6 +1115,34 @@ $("#collBtn").onclick=async()=>{
 $("#cOnlyMissing").onchange=()=>colls&&renderColls();
 $("#cClose").onclick=()=>$("#collDlg").close();
 $("#cList").onclick=e=>{const b=e.target.closest("[data-movie]");if(b){$("#collDlg").close();openDetail(b.dataset.movie)}};
+
+/* ---------- leftovers ---------- */
+let lefts=null;
+function renderLeft(){
+  const items=[...lefts.folders.map(f=>({...f,folder:true})),...lefts.junk];
+  const total=items.reduce((a,x)=>a+x.size,0);
+  $("#lSum").textContent=items.length?`${plural(lefts.folders.length,"folder")} and ${plural(lefts.junk.length,"junk file")}, ${size(total)} in all.`:"";
+  $("#lList").innerHTML=items.map((x,i)=>`<li style="padding:6px 0;border-bottom:1px solid var(--line,#333)"><label style="display:flex;gap:10px;align-items:flex-start">
+    <input type="checkbox" data-left="${esc(x.path)}" checked><span><strong style="word-break:break-all">${x.folder?"📁 ":""}${esc(x.path)}</strong>
+    <span class="note"> · ${size(x.size)}${x.inside?` · ${esc(x.inside)}`:""}</span></span></label></li>`).join("")
+    ||'<li class="note">No leftovers: every folder holds a movie or episode.</li>';
+  $("#lGo").disabled=!items.length;$("#lAll").checked=true;
+}
+$("#leftBtn").onclick=async()=>{
+  try{lefts=await api(`/api/leftovers?kind=${mode==="tv"?"tv":"movies"}`);renderLeft();$("#leftDlg").showModal()}
+  catch(e){finish(e.message,true)}
+};
+$("#lAll").onchange=e=>$$("#lList [data-left]").forEach(c=>c.checked=e.target.checked);
+$("#lClose").onclick=()=>$("#leftDlg").close();
+$("#lGo").onclick=async()=>{
+  const paths=$$("#lList [data-left]:checked").map(c=>c.dataset.left);
+  if(!paths.length)return;
+  $("#lGo").disabled=true;
+  try{const d=await api("/api/leftovers/recycle",{kind:mode==="tv"?"tv":"movies",paths});lefts=d;renderLeft();
+    finish(`Sent ${plural(d.recycled.length,"item")} to the Recycle Bin.`+(d.failed.length?` Not sent: ${d.failed.map(f=>`${f.path} (${f.error})`).join("; ")}`:""),!!d.failed.length)}
+  catch(e){finish(e.message,true)}
+  finally{$("#lGo").disabled=false}
+};
 
 /* ---------- switching between Movies and TV shows ---------- */
 function applyMode(){

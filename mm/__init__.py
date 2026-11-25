@@ -6,6 +6,7 @@ tmdbapi    TMDB search and matching (using IDs from existing .nfo files first)
 movie      one movie: details, files, artwork, metadata edits, open folder
 renamer    Jellyfin renaming with preview and undo
 nfo        .nfo files (read, write, merge, edit)
+leftovers  folders left with only artwork/.nfo/tracker files, and tracker junk: to the Recycle Bin
 export     movies, episodes, missing episodes and collections as CSV or HTML
 cli        command-line mode (python app.py --help)
 trakt      Trakt: watched status into the .nfo files (device login)
