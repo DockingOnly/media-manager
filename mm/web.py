@@ -7,9 +7,9 @@ import webbrowser
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from flask import Flask, jsonify, request
+from flask import Flask, Response, jsonify, request
 
-from . import artwork, bulk, collections, core, library, movie, nfo, renamer, subtitles, tmdbapi, trailers, trakt
+from . import artwork, bulk, collections, core, export, library, movie, nfo, renamer, subtitles, tmdbapi, trailers, trakt
 from .core import UserError
 
 app = Flask(__name__, static_folder=str(core.BASE / "static"), static_url_path="")
@@ -344,7 +344,19 @@ def api_bulk_edit():
 def api_collections():
     root = core.require_scan()
     tmdbapi.tmdb("/configuration")
-    return job_response("collections", "Checking for changes", 0, lambda job: collections.run(job, root))
+    def work(job):
+        result = collections.run(job, root)
+        core.state["collections"] = result  # kept for exporting
+        return result
+
+    return job_response("collections", "Checking for changes", 0, work)
+
+
+@app.get("/api/export")
+def api_export():
+    kind, fmt = request.args.get("kind", "movies"), request.args.get("format", "csv")
+    name, data, ctype = export.export(kind, fmt, core.state.get("collections"))
+    return Response(data, mimetype=ctype.split(";")[0], headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 @app.post("/api/open-folder")

@@ -256,6 +256,12 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
   <button class="ghost" id="collBtn">Collections…</button>
   <button id="bulkBtn" hidden>Edit selected…</button>
   <button class="ghost" id="traktBtn" hidden>Sync watched from Trakt…</button>
+  <span class="export-wrap"><select id="exportKind" aria-label="What to export">
+    <option value="">Export…</option><option value="movies.csv" data-mode="movies">Movies (spreadsheet)</option><option value="movies.html" data-mode="movies">Movies (web page)</option>
+    <option value="collections.csv" data-mode="movies">Collections (spreadsheet)</option>
+    <option value="tv.csv" data-mode="tv">Episodes (spreadsheet)</option><option value="tv.html" data-mode="tv">Episodes (web page)</option>
+    <option value="missing.csv" data-mode="tv">Missing episodes (spreadsheet)</option><option value="missing.html" data-mode="tv">Missing episodes (web page)</option>
+  </select></span>
   <button class="ghost" id="trBtn">Download trailers…</button>
   <button class="ghost" id="subBtn">Download subtitles…</button>
 </div>
@@ -913,6 +919,18 @@ function showFolders(c){
 $("#folderPick").onchange=()=>{if(jobId)return;$("#folder").value=$("#folderPick").value;rows=[];shows=[];scanFolder(true)};
 $("#folderForget").onclick=async()=>{const f=$("#folderPick").value;if(!f||!confirm(`Remove “${f}” from the list? Nothing on disk changes, and you can add it again by scanning it.`))return;
   try{const c=await api("/api/folders/forget",{folder:f,kind:mode==="tv"?"tv":"movies"});showFolders(c)}catch(e){status(e.message,true)}};
+
+/* ---------- export ---------- */
+$("#exportKind").onfocus=()=>{for(const o of $("#exportKind").options)if(o.dataset.mode)o.hidden=o.dataset.mode!==(mode==="tv"?"tv":"movies")};
+$("#exportKind").onchange=async e=>{
+  const v=e.target.value;e.target.value="";if(!v)return;
+  const [kind,format]=v.split(".");
+  const r=await fetch(`/api/export?kind=${kind}&format=${format}`);
+  if(!r.ok){let m="Export failed.";try{m=(await r.json()).error||m}catch{}finish(m,true);return}
+  const name=(r.headers.get("Content-Disposition")||"").match(/filename="([^"]+)"/)?.[1]||`${kind}.${format}`;
+  const a=document.createElement("a");a.href=URL.createObjectURL(await r.blob());a.download=name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);finish(`Exported ${name} to your Downloads folder.`)
+};
 
 /* ---------- Trakt ---------- */
 $("#trConnect").onclick=async()=>{
