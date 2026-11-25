@@ -14,7 +14,7 @@ lib, st = S / "libE", S / "stE"
 for d in (lib, st):
     shutil.rmtree(d, ignore_errors=True)
 st.mkdir(parents=True)
-for name in ("CONFIG", "MATCHES", "RENAME_LOG", "LIBRARY", "EDITS"):
+for name in ("CONFIG", "MATCHES", "RENAME_LOG", "LIBRARY", "EDITS", "HISTORY", "PROBES"):
     setattr(core, name, st / f"{name.lower()}.json")
 core.save_json(core.CONFIG, {"tmdb_key": "x", "folder": str(lib)})
 ok = lambda cond, msg: print(("PASS " if cond else "FAIL ") + msg)

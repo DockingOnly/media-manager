@@ -294,6 +294,7 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
   <button class="ghost" id="traktBtn" hidden>Sync watched from Trakt…</button>
   <details class="menu" id="toolsMenu"><summary class="ghost" role="button" aria-haspopup="menu">Tools ▾</summary>
     <div class="menu-list" role="menu">
+      <button class="ghost" id="histBtn" role="menuitem">History… <small>what the app changed, with Restore and Move back</small></button>
       <button class="ghost" id="playBtn" role="menuitem">Playback check… <small>what Jellyfin will have to convert</small></button>
       <button class="ghost" id="dupBtn" role="menuitem">Find duplicates… <small>the same movie or episode twice</small></button>
       <button class="ghost" id="leftBtn" role="menuitem">Tidy leftovers… <small>folders with nothing left to play</small></button>
@@ -424,6 +425,16 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
     <p class="note full" style="margin:0">Each title's .nfo is updated (everything else in it is kept) and locked so Jellyfin keeps the change. Titles without a confirmed match are skipped.</p>
   </div>
   <div class="foot"><button class="ghost" id="bClose">Cancel</button><button id="bGo">Apply</button></div>
+</div></dialog>
+
+<dialog id="histDlg" class="wide" aria-labelledby="hTitle"><div class="dlg">
+  <div class="head"><h2 id="hTitle">History</h2><div class="note" id="hSum">Everything the app moved, recycled or wrote, newest first.</div>
+    <div style="display:flex;gap:8px;margin-top:8px"><input id="hFilter" placeholder="Find a file or task" aria-label="Find in history" style="flex:1">
+      <select id="hType" aria-label="Show which changes"><option value="">All changes</option><option value="moved">Moves</option>
+        <option value="recycled">Recycle Bin</option><option value="restored">Restored</option><option value="wrote">Files written</option><option value="deleted">Deleted for good</option></select></div></div>
+  <div class="body" id="hList"></div>
+  <div class="foot"><span class="grow note"><strong>Restore</strong> brings things back from the Recycle Bin while they're still there. <strong>Move back</strong> undoes a task's moves when every file is still where the app put it. Files written (.nfo, artwork, subtitles) can be rebuilt by running that task again.</span>
+    <button class="ghost" id="hMore" hidden>Older…</button><button class="ghost" id="hClose">Close</button></div>
 </div></dialog>
 
 <dialog id="playDlg" class="wide" aria-labelledby="pbTitle"><div class="dlg">
@@ -836,7 +847,7 @@ $("#rGo").onclick=async()=>{
   if(!ids.length)return;
   $("#renDlg").close();
   try{const d=await runJob(ep("/api/rename/apply"),{ids},"Renaming");applyResult(d);
-    finish(`Rename complete: ${noun(d.renamed)} renamed.`+(d.failed.length?` ${d.failed.length} failed: ${d.failed.map(f=>`${f.name} (${f.error})`).join("; ")}`:" You can undo this from Preview renames."),!!d.failed.length);
+    finish(`Rename complete: ${noun(d.renamed)} renamed.`+(d.failed.length?` ${d.failed.length} failed: ${d.failed.map(f=>`${f.name} (${f.error})`).join("; ")}`:" Undo it from Preview renames, or any rename later from Tools → History."),!!d.failed.length);
   }catch(e){finish(e.message,true)}
 };
 $("#rUndo").onclick=async()=>{
@@ -1016,7 +1027,7 @@ $("#dGo").onclick=async()=>{
   try{const d=await api("/api/delete",{id:delId,mode});setRows(d.items);$("#delDlg").close();
     const what=mode==="folder"?`the folder for ${d.name}`:d.name;
     if(d.failed.length)status(`Couldn't delete everything for ${d.name}: ${d.failed.map(f=>`${f.name} (${f.error})`).join("; ")}`,true);
-    else finish(d.permanent?`Deleted ${what} permanently.`:`Moved ${what} to the Recycle Bin.`);
+    else finish(d.permanent?`Deleted ${what} permanently.`:`Moved ${what} to the Recycle Bin. Restore it any time from Tools → History.`);
   }catch(e){$("#dMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}
   done();
 };
@@ -1245,7 +1256,7 @@ $("#lGo").onclick=async()=>{
   if(!paths.length)return;
   $("#lGo").disabled=true;
   try{const d=await api("/api/leftovers/recycle",{kind:mode==="tv"?"tv":"movies",paths});lefts=d;renderLeft();
-    const msg=`Sent ${plural(d.recycled.length,"item")} to the Recycle Bin.`+(d.failed.length?` Not sent: ${d.failed.map(f=>`${f.path} (${f.error})`).join("; ")}`:"");
+    const msg=`Sent ${plural(d.recycled.length,"item")} to the Recycle Bin${d.recycled.length?" (restore from Tools → History)":""}.`+(d.failed.length?` Not sent: ${d.failed.map(f=>`${f.path} (${f.error})`).join("; ")}`:"");
     $("#lSum").textContent=msg+($("#lSum").textContent?" Still here: "+$("#lSum").textContent:"");
     finish(msg,!!d.failed.length)}
   catch(e){$("#lSum").textContent=e.message;finish(e.message,true)}
@@ -1256,6 +1267,85 @@ $("#lGo").onclick=async()=>{
 $("#toolsMenu").addEventListener("click",e=>{if(e.target.closest(".menu-list button"))$("#toolsMenu").open=false});
 document.addEventListener("click",e=>{if(!e.target.closest("#toolsMenu"))$("#toolsMenu").open=false});
 $("#toolsMenu").addEventListener("keydown",e=>{if(e.key==="Escape"){$("#toolsMenu").open=false;$("#toolsMenu summary").focus()}});
+
+/* ---------- history ---------- */
+let hist=[];
+const H_ICON={moved:["→","Moved"],recycled:["🗑","Sent to the Recycle Bin"],wrote:["✎","Written"],deleted:["✖","Deleted for good (network drive)"],restored:["↩","Restored"]};
+const when=t=>new Date(t*1000).toLocaleString([], {dateStyle:"medium",timeStyle:"short"});
+const clock=t=>new Date(t*1000).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+function dayOf(t){
+  const d=new Date(t*1000),today=new Date();today.setHours(0,0,0,0);
+  const diff=Math.round((today-new Date(d.getFullYear(),d.getMonth(),d.getDate()))/864e5);
+  return diff===0?"Today":diff===1?"Yesterday":d.toLocaleDateString([], {weekday:"long",day:"numeric",month:"long",year:"numeric"});
+}
+let libRoots=[];
+function short(p){  // a path from the library folder down; the full path is on hover
+  const norm=x=>x.replace(/\//g,"\\").replace(/\\+$/,"");  // D:/Media and D:\Media are the same folder
+  const low=norm(p).toLowerCase(),root=libRoots.map(norm).find(r=>low.startsWith(r.toLowerCase()+"\\"));
+  return root?norm(p).slice(root.length+1):p;
+}
+const pathHtml=p=>`<span title="${esc(p)}">${esc(short(p))}</span>`;
+function histItem(e,it,i){
+  const [icon,label]=H_ICON[it.do]||["•",it.do];
+  const body=it.do==="moved"?`${pathHtml(it.path)}<br><span class="note">→ ${pathHtml(it.to)}</span>`:pathHtml(it.path);
+  const where=it.do==="moved"?it.to:it.path;
+  const act=(it.do==="recycled"?(it.restored?`<span class="tag r">Restored</span>`:`<button class="ghost small" data-hrestore="${esc(e.id)}" data-i="${i}">Restore</button>`):"")
+    +(it.do!=="deleted"&&!(it.do==="recycled"&&!it.restored)?`<button class="ghost small" data-hreveal="${esc(where)}" title="Open the folder in Explorer">Show</button>`:"");
+  return `<li style="display:flex;gap:8px;padding:3px 0;align-items:flex-start"><span title="${esc(label)}" style="flex:none;width:1.4em">${icon}</span><span style="flex:1;word-break:break-all">${body}</span>${act}</li>`;
+}
+function histMatches(e){
+  const q=$("#hFilter").value.trim().toLowerCase(),t=$("#hType").value;
+  if(t&&!e.counts[t])return false;
+  return !q||e.title.toLowerCase().includes(q)||e.items.some(it=>(it.path+" "+(it.to||"")).toLowerCase().includes(q));
+}
+function renderHist(){
+  const q=$("#hFilter").value.trim().toLowerCase(),t=$("#hType").value,shown=hist.filter(histMatches);
+  let lastDay="";
+  $("#hList").innerHTML=shown.map(e=>{
+    const day=dayOf(e.time),head=day!==lastDay?`<h3 style="margin:14px 0 2px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)">${esc(day)}</h3>`:"";lastDay=day;
+    const c=e.counts,parts=[c.moved&&`${c.moved} moved`,c.recycled&&`${c.recycled} to the Recycle Bin`,c.restored&&`${c.restored} restored`,c.wrote&&`${c.wrote} written`,c.deleted&&`${c.deleted} deleted`].filter(Boolean).join(", ");
+    const items=e.items.map((it,i)=>[it,i]).filter(([it])=>(!t||it.do===t)&&(!q||e.title.toLowerCase().includes(q)||(it.path+" "+(it.to||"")).toLowerCase().includes(q)))
+      .sort((a,b)=>(a[0].do==="wrote")-(b[0].do==="wrote"));
+    const open=(q||t)?"open":"";
+    return `${head}<section style="padding:10px 0;border-bottom:1px solid var(--line)">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <strong>${esc(e.title)}</strong>${e.library==="tv"?' <span class="tag">TV</span>':""}${e.by==="watch"?' <span class="tag" title="Done by Watch for new files">Automatic</span>':""}<span class="note">${clock(e.time)} · ${esc(parts)}</span>
+        <span style="flex:1"></span>
+        ${e.moved_back?`<span class="tag r">Moved back ${when(e.moved_back)}</span>`:""}
+        ${e.can_move_back?`<button class="ghost small" data-hback="${esc(e.id)}">Move back</button>`:""}
+        ${e.restorable>1?`<button class="ghost small" data-hrestore="${esc(e.id)}">Restore all ${e.restorable}</button>`:""}
+      </div>
+      <details style="margin-top:4px" ${open}><summary class="note" style="cursor:pointer">Show ${(q||t)&&items.length!==e.items.length?`${items.length} of ${e.items.length} changes`:plural(e.items.length,"change")}</summary>
+        <ul style="list-style:none;padding:0;margin:6px 0 0">${items.slice(0,300).map(([it,i])=>histItem(e,it,i)).join("")}</ul>
+        ${e.items.length>300?`<p class="note">…and ${e.items.length-300} more.</p>`:""}</details></section>`}).join("")
+    ||(hist.length?`<p class="note">Nothing in what's loaded matches.${$("#hMore").hidden?"":" Older entries may: choose Older…"}</p>`
+      :'<p class="note">Nothing yet. From now on, everything the app moves, recycles or writes is listed here.</p>');
+}
+$("#hFilter").oninput=$("#hType").onchange=()=>renderHist();
+async function loadHist(more){
+  const d=await api("/api/history"+(more&&hist.length?`?before=${encodeURIComponent(hist[hist.length-1].id)}`:""));
+  hist=more?hist.concat(d.entries):d.entries;$("#hMore").hidden=!d.more;renderHist();
+}
+async function openHistory(){
+  try{const c=await api("/api/config");libRoots=[...(c.folders||[]),...(c.tv_folders||[])].sort((a,b)=>b.length-a.length);
+    await loadHist(false);$("#histDlg").showModal()}catch(e){finish(e.message,true)}
+}
+$("#histBtn").onclick=openHistory;
+$("#hMore").onclick=()=>loadHist(true).catch(e=>$("#hSum").textContent=e.message);
+$("#hClose").onclick=()=>$("#histDlg").close();
+$("#hList").onclick=async e=>{
+  const rv=e.target.closest("[data-hreveal]");
+  if(rv){api("/api/history/reveal",{path:rv.dataset.hreveal}).catch(err=>$("#hSum").textContent=err.message);return}
+  const b=e.target.closest("[data-hback],[data-hrestore]");if(!b)return;b.disabled=true;
+  try{
+    let msg;
+    if(b.dataset.hback){const d=await api("/api/history/move-back",{id:b.dataset.hback});
+      msg=`Moved ${plural(d.moved,"file")} back.`+(d.failed.length?` ${d.failed.length} couldn't be: ${d.failed.map(f=>f.error).join("; ")}`:"")}
+    else{const d=await api("/api/history/restore",{id:b.dataset.hrestore,...(b.dataset.i!==undefined?{index:+b.dataset.i}:{})});
+      msg=`Restored ${plural(d.restored.length,"item")} from the Recycle Bin.`+(d.failed.length?` Not restored: ${d.failed.map(f=>`${f.path} (${f.error})`).join("; ")}`:"")}
+    $("#hSum").textContent=msg;finish(msg);await loadHist(false);loadLibrary();
+  }catch(err){$("#hSum").textContent=err.message;b.disabled=false}
+};
 
 /* ---------- playback check ---------- */
 let pb=null;
@@ -1350,7 +1440,7 @@ $("#dGo").onclick=async()=>{
   try{const d=await api("/api/dupes/recycle",{kind:mode==="tv"?"tv":"movies",ids});applyResult(d);
     const gone=new Set(d.recycled.map(p=>p.toLowerCase()));
     const n=dups.groups.flatMap(g=>g.copies).filter(c=>ids.includes(c.id)&&c.paths.every(p=>gone.has(p.toLowerCase()))).length;
-    const msg=`Sent ${n} ${n===1?"copy":"copies"} to the Recycle Bin.`+(d.failed.length?` Not sent: ${d.failed.map(f=>`${f.path} (${f.error})`).join("; ")}`:"")+(n?" Tidy leftovers will offer any folder left empty.":"");
+    const msg=`Sent ${n} ${n===1?"copy":"copies"} to the Recycle Bin${n?" (restore from Tools → History)":""}.`+(d.failed.length?` Not sent: ${d.failed.map(f=>`${f.path} (${f.error})`).join("; ")}`:"")+(n?" Tidy leftovers will offer any folder left empty.":"");
     dups.groups=dups.groups.map(g=>({...g,copies:g.copies.filter(c=>!c.paths.every(p=>gone.has(p.toLowerCase())))})).filter(g=>g.copies.length>1);
     renderDups(msg);finish(msg,!!d.failed.length)}
   catch(e){$("#dSum").textContent=e.message;finish(e.message,true)}
@@ -1450,7 +1540,7 @@ async function tvDelete(k,what,extra={}){
     if(!confirm(`${how} ${label}?\n\n${plural(p.count,"file")}, ${size(p.size)}${p.episodes?`, ${plural(p.episodes,"episode")}`:""}:\n${list}`))return;
     const d=await api("/api/tv/delete",{key:k,what,...extra});setShows(d.shows);
     if(d.failed.length)status(`Couldn't delete everything: ${d.failed.map(f=>`${f.name} (${f.error})`).join("; ")}`,true);
-    else finish(p.permanent?`Deleted ${label} permanently.`:`Moved ${label} to the Recycle Bin.`);
+    else finish(p.permanent?`Deleted ${label} permanently.`:`Moved ${label} to the Recycle Bin. Restore it any time from Tools → History.`);
     if(what==="show")$("#shDlg").close();else if($("#shDlg").open)openShow(k,true);
   }catch(e){if($("#shDlg").open)$("#shMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`;else finish(e.message,true)}
 }

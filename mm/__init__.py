@@ -11,6 +11,8 @@ leftovers  folders left with only artwork/.nfo/tracker files, and tracker junk: 
 jellyfin   tells Jellyfin which folders changed; checks Jellyfin's settings for anything that fights this app
 playback   which files Jellyfin will have to convert to play, and why, per kind of device
 watch      watching for new files: match, .nfo and artwork by themselves; renames wait for you
+history    what the app changed, with Restore (Recycle Bin) and Move back
+recyclebin restoring from the Windows Recycle Bin
 export     movies, episodes, missing episodes and collections as CSV or HTML
 cli        command-line mode (python app.py --help)
 trakt      Trakt: watched status into the .nfo files (device login)

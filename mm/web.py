@@ -7,10 +7,10 @@ import webbrowser
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from flask import Flask, Response, jsonify, request
+from flask import Flask, Response, g, jsonify, request
 
-from . import (artwork, bulk, collections, core, dupes, export, jellyfin, leftovers, library, movie, nfo, playback, renamer,
-               subtitles, tmdbapi, trailers, trakt, watch)
+from . import (artwork, bulk, collections, core, dupes, export, history, jellyfin, leftovers, library, movie, nfo, playback,
+               renamer, subtitles, tmdbapi, trailers, trakt, watch)
 from .core import UserError
 
 app = Flask(__name__, static_folder=str(core.BASE / "static"), static_url_path="")
@@ -38,12 +38,58 @@ def user_error(err):
     return jsonify(error=str(err)), 400
 
 
+@app.errorhandler(OSError)
+def file_error(err):
+    """A file problem the page can show (not a server error page)."""
+    if isinstance(err, PermissionError):
+        return jsonify(error=f"Windows wouldn't let the app use {getattr(err, 'filename', None) or 'a file'} just now "
+                             "(another program had it open). Try again in a moment."), 409
+    return jsonify(error=f"File error: {getattr(err, 'strerror', None) or err}"), 500
+
+
 def body() -> dict:
     return request.get_json(silent=True) or {}
 
 
 def job_response(kind: str, label: str, total: int, work):
     return jsonify(job=core.start_job(kind, label, total, work))
+
+
+@app.before_request
+def collect_changes():
+    """Each click that changes files becomes one History entry (background tasks collect their own)."""
+    if request.method == "POST" and request.path.startswith("/api/") and not request.path.startswith("/api/job/"):
+        g.collecting = core.begin_activity(request.path, history.path_title(request.path),
+                                           "tv" if request.path.startswith("/api/tv/") else "")
+
+
+@app.teardown_request
+def save_changes(exc):
+    if g.pop("collecting", False):
+        core.end_activity()
+
+
+@app.get("/api/history")
+def api_history():
+    return jsonify(history.entries(before=request.args.get("before") or None))
+
+
+@app.post("/api/history/move-back")
+def api_history_move_back():
+    return jsonify(history.move_back(str(body().get("id") or "")))
+
+
+@app.post("/api/history/reveal")
+def api_history_reveal():
+    history.reveal(str(body().get("path") or ""))
+    return jsonify(ok=True)
+
+
+@app.post("/api/history/restore")
+def api_history_restore():
+    d = body()
+    index = d.get("index")
+    return jsonify(history.restore(str(d.get("id") or ""), int(index) if index is not None else None))
 
 
 @app.get("/")
@@ -717,6 +763,7 @@ def main() -> None:
             raise SystemExit(1)
         print("Closed it.")
     threading.Thread(target=watchdog, daemon=True).start()
+    history.enabled = True
     jellyfin.start()
     watch.start()
     threading.Timer(3.0, open_browser_unless_reconnected, args=(port,)).start()
