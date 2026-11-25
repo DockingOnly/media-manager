@@ -26,11 +26,12 @@ DV = """  Duration: 00:44:00.00
       DOVI configuration record: version: 1.0, profile: 8
   Stream #0:1(und): Audio: aac (LC), 48000 Hz, mono, fltp"""
 i = mediainfo.parse(HDR)
-ok(i["duration"] == 7290 and i["video"] == {"codec": "hevc", "width": 3840, "height": 2160, "aspect": 1.78, "hdr": "hdr10"},
+ok(i["duration"] == 7290 and {k: i["video"][k] for k in ("codec", "width", "height", "aspect", "hdr")} == {"codec": "hevc", "width": 3840, "height": 2160, "aspect": 1.78, "hdr": "hdr10"}
+   and i["video"]["bit_depth"] == 10 and i["video"]["profile"] == "Main 10" and i["bitrate"] == 50000 and i["subtitles"][0]["codec"] == "hdmv_pgs_subtitle",
    "HDR10 4K video read (cover art ignored)")
 ok([(a["codec"], a["channels"], a["language"]) for a in i["audio"]] == [("truehd", 8, "eng"), ("ac3", 6, "ger")], "7.1 and 5.1 audio tracks with languages")
 d = mediainfo.parse(DV)
-ok(d["video"]["hdr"] == "dolbyvision" and d["audio"][0]["channels"] == 1 and d["audio"][0]["language"] == "", "Dolby Vision; mono; an undetermined language is left empty")
+ok(d["video"]["hdr"] == "dolbyvision" and d["video"]["dv_profile"] == 8 and d["audio"][0]["profile"] == "LC" and d["audio"][0]["channels"] == 1 and d["audio"][0]["language"] == "", "Dolby Vision; mono; an undetermined language is left empty")
 x = ET.tostring(mediainfo.streamdetails(i), encoding="unicode")
 ok("<hdrtype>hdr10</hdrtype>" in x and "<channels>8</channels>" in x and "<durationinseconds>7290</durationinseconds>" in x
    and x.count("<subtitle>") == 1, "the <fileinfo><streamdetails> block Kodi and Jellyfin read")

@@ -9,8 +9,8 @@ from urllib.parse import urlsplit
 
 from flask import Flask, Response, jsonify, request
 
-from . import (artwork, bulk, collections, core, dupes, export, jellyfin, leftovers, library, movie, nfo, renamer, subtitles,
-               tmdbapi, trailers, trakt, watch)
+from . import (artwork, bulk, collections, core, dupes, export, jellyfin, leftovers, library, movie, nfo, playback, renamer,
+               subtitles, tmdbapi, trailers, trakt, watch)
 from .core import UserError
 
 app = Flask(__name__, static_folder=str(core.BASE / "static"), static_url_path="")
@@ -178,6 +178,24 @@ def api_jellyfin_test():
     s = jellyfin.settings()
     url = jellyfin.check_url(d.get("url") or s["url"])
     return jsonify(jellyfin.check(url, (d.get("key") or "").strip() or s["key"], d.get("map") if "map" in d else None))
+
+
+@app.get("/api/jellyfin/check")
+def api_jellyfin_check():
+    return jsonify(jellyfin.settings_check())
+
+
+@app.post("/api/jellyfin/fix")
+def api_jellyfin_fix():
+    d = body()
+    return jsonify(jellyfin.fix(str(d.get("fix") or ""), str(d.get("library") or "")))
+
+
+@app.post("/api/playback")
+def api_playback():
+    kind = "tv" if body().get("kind") == "tv" else "movies"
+    leftover_root(kind)  # a scan is needed first
+    return job_response("playback", "Reading the files", 0, lambda job: playback.check(job, kind))
 
 
 @app.post("/api/jellyfin/refresh")

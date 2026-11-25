@@ -5,7 +5,7 @@ from pathlib import Path
 
 from guessit import guessit
 
-from . import core
+from . import core, mediainfo
 from .core import key_of, norm_title
 
 SKIP_FILE = re.compile(r"(^|[\s._-])(sample|trailer)([\s._-]|$)", re.I)
@@ -79,7 +79,7 @@ def resolution_of(width: int, height: int) -> str:
 
 def probe_video(path: Path) -> dict:
     """Read the real resolution and codec from the video itself (for files whose names don't say)."""
-    m = VIDEO_STREAM.search(core.ffmpeg_info(path, timeout=30))
+    m = VIDEO_STREAM.search(mediainfo.text_of(path) or "")  # (kept, so later checks don't read the file again)
     if not m:
         return {}
     codec, width, height = m.group(1), int(m.group(2)), int(m.group(3))
@@ -282,7 +282,8 @@ def sub_languages(names: dict, stem: str) -> list:
     for n in names:
         if n.startswith(stem + ".") and Path(n).suffix in core.SUB_EXTS:
             rest = n[len(stem) + 1:]
-            langs.add(rest.split(".")[0] if "." in rest else "?")
+            code = rest.split(".")[0].lower() if "." in rest else "?"
+            langs.add(mediainfo.LANG2.get(code, code))  # 'eng' and 'en' are the same language
     return sorted(langs)
 
 
@@ -321,6 +322,7 @@ def annotate(items: list, root: Path) -> list:
                    or (own and any(n in names for n in ("poster.jpg", "poster.png", "folder.jpg", "cover.jpg"))),
             "trailer": has_trailer(folder, names, stem, own),
             "subs": sub_languages(names, stem),
+            "subs_in": mediainfo.embedded_subs(video),  # tracks inside the video (only if it's been read already)
         }
         m = it.get("match") or {}
         it["named"] = False

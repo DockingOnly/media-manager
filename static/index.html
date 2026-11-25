@@ -23,6 +23,15 @@ input,select,button{font:inherit;color:var(--ink);background:var(--surface);bord
 button{cursor:pointer;background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
 button.ghost{background:var(--surface);border-color:var(--line);color:var(--ink)}
 button:disabled{opacity:.6;cursor:wait}
+.menu{position:relative;display:inline-block}
+.menu>summary{list-style:none;cursor:pointer;font-weight:600;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 12px;user-select:none}
+.menu>summary::-webkit-details-marker{display:none}
+.menu[open]>summary{border-color:var(--accent)}
+.menu-list{position:absolute;z-index:20;top:calc(100% + 4px);left:0;min-width:300px;display:flex;flex-direction:column;gap:2px;padding:6px;
+  background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.menu-list button{text-align:left;border-color:transparent;display:flex;flex-direction:column;gap:2px}
+.menu-list button:hover:not(:disabled){border-color:var(--line)}
+.menu-list small{font-weight:400;color:var(--muted)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px;margin:0 0 18px}
 .panel label{display:block;font-weight:600;margin:0 0 4px}
@@ -279,19 +288,24 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
   <button class="ghost" id="renameBtn">Preview renames…</button>
   <button class="ghost" id="nfoBtn">Write .nfo files…</button>
   <button class="ghost" id="artBtn">Download artwork…</button>
-  <button class="ghost" id="collBtn">Collections…</button>
-  <button class="ghost" id="leftBtn">Tidy leftovers…</button>
-  <button class="ghost" id="dupBtn">Find duplicates…</button>
+  <button class="ghost" id="trBtn">Download trailers…</button>
+  <button class="ghost" id="subBtn">Download subtitles…</button>
   <button id="bulkBtn" hidden>Edit selected…</button>
   <button class="ghost" id="traktBtn" hidden>Sync watched from Trakt…</button>
+  <details class="menu" id="toolsMenu"><summary class="ghost" role="button" aria-haspopup="menu">Tools ▾</summary>
+    <div class="menu-list" role="menu">
+      <button class="ghost" id="playBtn" role="menuitem">Playback check… <small>what Jellyfin will have to convert</small></button>
+      <button class="ghost" id="dupBtn" role="menuitem">Find duplicates… <small>the same movie or episode twice</small></button>
+      <button class="ghost" id="leftBtn" role="menuitem">Tidy leftovers… <small>folders with nothing left to play</small></button>
+      <button class="ghost" id="collBtn" role="menuitem">Collections… <small>which films in a series you're missing</small></button>
+      <button class="ghost" id="jfCheckBtn" role="menuitem">Check Jellyfin's settings… <small>anything that fights this app's files</small></button>
+    </div></details>
   <span class="export-wrap"><select id="exportKind" aria-label="What to export">
     <option value="">Export…</option><option value="movies.csv" data-mode="movies">Movies (spreadsheet)</option><option value="movies.html" data-mode="movies">Movies (web page)</option>
     <option value="collections.csv" data-mode="movies">Collections (spreadsheet)</option>
     <option value="tv.csv" data-mode="tv">Episodes (spreadsheet)</option><option value="tv.html" data-mode="tv">Episodes (web page)</option>
     <option value="missing.csv" data-mode="tv">Missing episodes (spreadsheet)</option><option value="missing.html" data-mode="tv">Missing episodes (web page)</option>
   </select></span>
-  <button class="ghost" id="trBtn">Download trailers…</button>
-  <button class="ghost" id="subBtn">Download subtitles…</button>
 </div>
 <div class="tools" id="tools" hidden>
   <input id="filter" placeholder="Filter by title, year or file name" aria-label="Filter movies">
@@ -412,6 +426,22 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
   <div class="foot"><button class="ghost" id="bClose">Cancel</button><button id="bGo">Apply</button></div>
 </div></dialog>
 
+<dialog id="playDlg" class="wide" aria-labelledby="pbTitle"><div class="dlg">
+  <div class="head"><h2 id="pbTitle">Playback check</h2>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:6px">Watching on <select id="pbProfile"></select></label>
+    <div class="note" id="pbSum" style="margin-top:6px"></div></div>
+  <div class="body" id="pbList"></div>
+  <div class="foot"><span class="grow note">What Jellyfin usually does for this kind of player. Converting video is heavy work for the server and can stutter on a slow one; light work hardly matters. Nothing here changes your files.</span>
+    <button class="ghost" id="pbClose">Close</button></div>
+</div></dialog>
+
+<dialog id="jfDlg" class="wide" aria-labelledby="jcTitle"><div class="dlg">
+  <div class="head"><h2 id="jcTitle">Jellyfin's settings</h2><div class="note" id="jcSum"></div></div>
+  <div class="body" id="jcList"></div>
+  <div class="foot"><span class="grow note">Fix changes that one setting in Jellyfin, exactly as you would under Dashboard → Libraries. After a fix, refresh the library in Jellyfin so it reads the .nfo files again.</span>
+    <button class="ghost" id="jcClose">Close</button></div>
+</div></dialog>
+
 <dialog id="dupDlg" class="wide" aria-labelledby="dTitle"><div class="dlg">
   <div class="head"><h2 id="dTitle">Duplicates</h2><div class="note" id="dSum"></div></div>
   <div class="body" id="dList"></div>
@@ -527,7 +557,7 @@ async function api(url,data,method){
 function busy(btn,text){const old=btn.textContent;btn.disabled=true;btn.textContent=text;return()=>{btn.disabled=false;btn.textContent=old}}
 /* ---------- progress ---------- */
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const JOB_BUTTONS=["#scan","#matchAll","#renameBtn","#nfoBtn","#artBtn","#collBtn","#dupBtn","#bulkBtn","#traktBtn","#trBtn","#subBtn"];
+const JOB_BUTTONS=["#scan","#matchAll","#renameBtn","#nfoBtn","#artBtn","#collBtn","#dupBtn","#playBtn","#bulkBtn","#traktBtn","#trBtn","#subBtn"];
 let jobId=null;
 function prog(cls){const p=$("#prog");p.hidden=false;p.className="prog"+(cls?" "+cls:"")}
 function status(t,err){  // a message with no bar
@@ -583,23 +613,25 @@ function matchCell(r){
   const label=m&&m.name?esc(m.name):`${esc(r.title)}${r.year?` (${r.year})`:""}`;
   return `<button class="mbtn" data-id="${esc(r.id)}" title="Details">${img}<span><span class="t1">${label}</span>${line2}</span></button>`;
 }
-const hasCount=r=>{const f=r.files||{};return(f.nfo?1:0)+(f.art?1:0)+(f.trailer?1:0)+((f.subs||[]).length?1:0)};
+const allSubs=f=>[...new Set([...(f.subs||[]),...(f.subs_in||[])])].sort();
+const hasCount=r=>{const f=r.files||{};return(f.nfo?1:0)+(f.art?1:0)+(f.trailer?1:0)+(allSubs(f).length?1:0)};
 const videoText=r=>[r.resolution,r.codec,r.source].filter(Boolean).join(" · ");
 const sortVal=(r,k)=>k==="match"?(r.match&&r.match.name)||`${r.title} (${r.year||""})`:k==="video"?parseInt(r.resolution)||0:k==="has"?hasCount(r):k==="named"?(r.named?1:0):r[k];
 let copies={};
 function countCopies(){copies={};rows.forEach(r=>{const id=ok(r.match)&&!r.part?r.match.tmdb_id:null;if(id)copies[id]=(copies[id]||0)+1})}
 function hasCell(r){
-  const f=r.files||{},subs=f.subs||[];
+  const f=r.files||{},subs=allSubs(f);
   const b=(on,label,tip)=>`<span class="${on?"y":""}" title="${tip}${on?"":" missing"}">${label}</span>`;
   const shown=subs.length>3?subs.slice(0,3).join(" ")+` +${subs.length-3}`:subs.join(" ");
-  return `<span class="has">${b(f.nfo,"NFO",".nfo file")}${b(f.art,"ART","Poster")}${b(f.trailer,"TRL","Trailer")}${b(subs.length,subs.length?esc(shown).toUpperCase():"SUB",subs.length?"Subtitles: "+esc(subs.join(", ")):"Subtitles")}</span>`;
+  const tip=[(f.subs||[]).length&&"Subtitle files: "+f.subs.join(", "),(f.subs_in||[]).length&&"Inside the video: "+f.subs_in.join(", ")].filter(Boolean).join(". ");
+  return `<span class="has">${b(f.nfo,"NFO",".nfo file")}${b(f.art,"ART","Poster")}${b(f.trailer,"TRL","Trailer")}${b(subs.length,subs.length?esc(shown).toUpperCase():"SUB",subs.length?esc(tip):"Subtitles")}</span>`;
 }
 function visible(r,show){
   switch(show){
     case"attention":return!r.named||!ok(r.match)||!(r.files||{}).nfo||!(r.files||{}).art;
     case"todo":return!r.named;case"ready":return r.named;
     case"no-nfo":return!(r.files||{}).nfo;case"no-art":return!(r.files||{}).art;
-    case"no-trailer":return!(r.files||{}).trailer;case"no-subs":return!((r.files||{}).subs||[]).length;
+    case"no-trailer":return!(r.files||{}).trailer;case"no-subs":return!allSubs(r.files||{}).length;
     case"dups":return ok(r.match)&&!r.part&&copies[r.match.tmdb_id]>1;
     case"matched":return ok(r.match);case"review":return r.match&&r.match.status==="review";
     case"unmatched":return!r.match||r.match.status==="none";default:return true}
@@ -1220,6 +1252,62 @@ $("#lGo").onclick=async()=>{
   finally{$("#lGo").disabled=false}
 };
 
+/* ---------- the Tools menu: closes after a choice, on a click elsewhere, and with Esc ---------- */
+$("#toolsMenu").addEventListener("click",e=>{if(e.target.closest(".menu-list button"))$("#toolsMenu").open=false});
+document.addEventListener("click",e=>{if(!e.target.closest("#toolsMenu"))$("#toolsMenu").open=false});
+$("#toolsMenu").addEventListener("keydown",e=>{if(e.key==="Escape"){$("#toolsMenu").open=false;$("#toolsMenu summary").focus()}});
+
+/* ---------- playback check ---------- */
+let pb=null;
+const PB_GROUPS=[["broken","Can't be read: the file may be damaged or incomplete",true],["heavy","Video gets converted: heavy work for the server",true],
+  ["maybe","Depends on the device",false],["light","Light work: audio converted or the file repackaged",false],
+  ["subs","Converted only while picture subtitles are on",false],["remote","Plays directly at home; converted when watching away",false],["direct","Plays directly",false]];
+function renderPlay(){
+  const prof=$("#pbProfile").value,order=PB_GROUPS.map(g=>g[0]);
+  const worst=f=>f.by_profile[prof].reduce((w,[sev])=>order.indexOf(sev)<order.indexOf(w)?sev:w,"direct");
+  const groups=Object.fromEntries(order.map(k=>[k,[]]));pb.files.forEach(f=>groups[worst(f)].push(f));
+  const n=pb.files.length,direct=groups.direct.length;
+  $("#pbSum").textContent=`${plural(n,"file")} checked: ${direct} (${n?Math.round(direct/n*100):0}%) play directly`+
+    (groups.heavy.length?`, ${groups.heavy.length} need their video converted`:"")+(groups.broken.length?`, ${groups.broken.length} can't be read`:"")+".";
+  $("#pbList").innerHTML=PB_GROUPS.filter(([k])=>groups[k].length).map(([k,label,open])=>`<details ${open?"open":""} style="margin:0 0 10px">
+    <summary style="cursor:pointer;font-weight:600">${esc(label)} <span class="note">(${groups[k].length})</span></summary>
+    <ul style="list-style:none;padding:0;margin:6px 0 0">${groups[k].slice(0,400).map(f=>`<li style="padding:6px 0;border-bottom:1px solid var(--line)">
+      <strong>${esc(f.name)}</strong> <span class="note">· ${esc([f.video,f.audio].filter(Boolean).join(" · "))}${f.bitrate?` · ${(f.bitrate/1000).toFixed(1)} Mb/s`:""}</span>
+      ${f.by_profile[prof].length?`<ul style="margin:4px 0 0 18px;padding:0">${f.by_profile[prof].map(([,t])=>`<li class="note">${esc(t)}</li>`).join("")}</ul>`:""}
+      <div class="note" style="word-break:break-all;opacity:.75">${esc(f.path)}</div></li>`).join("")}</ul>
+    ${groups[k].length>400?`<p class="note">…and ${groups[k].length-400} more.</p>`:""}</details>`).join("")||'<p class="note">No files.</p>';
+}
+$("#playBtn").onclick=async()=>{
+  try{pb=await runJob("/api/playback",{kind:mode==="tv"?"tv":"movies"},"Reading the files",true);
+    $("#pbProfile").innerHTML=Object.entries(pb.profiles).map(([k,v])=>`<option value="${k}">${esc(v)}</option>`).join("");
+    $("#pbProfile").value=localStorage.getItem("mm-play-profile")||"tv";
+    renderPlay();finish(`Playback check done: ${plural(pb.files.length,"file")}.`);$("#playDlg").showModal()}
+  catch(e){finish(e.message,true)}
+};
+$("#pbProfile").onchange=()=>{localStorage.setItem("mm-play-profile",$("#pbProfile").value);renderPlay()};
+$("#pbClose").onclick=()=>$("#playDlg").close();
+
+/* ---------- Jellyfin's settings ---------- */
+const JC_LEVEL={problem:["Problem","t"],warning:["Warning","t"],note:["Note",""]};
+function renderJc(d){
+  const probs=d.issues.filter(i=>i.level!=="note").length;
+  $("#jcSum").textContent=probs?`${plural(probs,"thing")} to look at.`:"Nothing in Jellyfin's settings fights this app's files.";
+  const libs=d.libraries.map(l=>`${esc(l.name)} (${esc(l.type)}${l.yours.length?`, holds your ${l.yours.map(y=>y==="tv"?"TV":"movie").join(" and ")} folder`:""})`).join("; ");
+  $("#jcList").innerHTML=(d.issues.map(i=>`<div style="padding:8px 0;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:flex-start">
+    <span class="tag ${JC_LEVEL[i.level][1]}" style="flex:none">${JC_LEVEL[i.level][0]}</span>
+    <span style="flex:1">${i.library?`<strong>${esc(i.library)}:</strong> `:""}${esc(i.text)}</span>
+    ${i.fix?`<button class="ghost small" data-fix="${esc(i.fix)}" data-lib="${esc(i.library_id||"")}">Fix</button>`:""}</div>`).join("")||"")
+    +`<p class="note" style="margin-top:10px">Jellyfin's libraries: ${libs||"none"}.</p>`;
+}
+$("#jfCheckBtn").onclick=async()=>{
+  try{const d=await api("/api/jellyfin/check");renderJc(d);$("#jfDlg").showModal()}
+  catch(e){finish(e.message,true)}
+};
+$("#jcList").onclick=async e=>{const b=e.target.closest("[data-fix]");if(!b)return;b.disabled=true;
+  try{renderJc(await api("/api/jellyfin/fix",{fix:b.dataset.fix,library:b.dataset.lib}));$("#jcSum").textContent="Fixed. "+$("#jcSum").textContent}
+  catch(e){$("#jcSum").textContent=e.message;b.disabled=false}};
+$("#jcClose").onclick=()=>$("#jfDlg").close();
+
 /* ---------- duplicates ---------- */
 let dups=null;
 const dur=s=>s?`${Math.floor(s/3600)?Math.floor(s/3600)+" h ":""}${Math.round(s%3600/60)} min`:"length unknown";
@@ -1260,8 +1348,9 @@ $("#dGo").onclick=async()=>{
   if(!ids.length)return;
   $("#dGo").disabled=true;
   try{const d=await api("/api/dupes/recycle",{kind:mode==="tv"?"tv":"movies",ids});applyResult(d);
-    const msg=`Sent ${plural(d.recycled.length,"file")} to the Recycle Bin.`+(d.failed.length?` Not sent: ${d.failed.map(f=>`${f.path} (${f.error})`).join("; ")}`:"")+(d.recycled.length?" Tidy leftovers will offer any folder left empty.":"");
     const gone=new Set(d.recycled.map(p=>p.toLowerCase()));
+    const n=dups.groups.flatMap(g=>g.copies).filter(c=>ids.includes(c.id)&&c.paths.every(p=>gone.has(p.toLowerCase()))).length;
+    const msg=`Sent ${n} ${n===1?"copy":"copies"} to the Recycle Bin.`+(d.failed.length?` Not sent: ${d.failed.map(f=>`${f.path} (${f.error})`).join("; ")}`:"")+(n?" Tidy leftovers will offer any folder left empty.":"");
     dups.groups=dups.groups.map(g=>({...g,copies:g.copies.filter(c=>!c.paths.every(p=>gone.has(p.toLowerCase())))})).filter(g=>g.copies.length>1);
     renderDups(msg);finish(msg,!!d.failed.length)}
   catch(e){$("#dSum").textContent=e.message;finish(e.message,true)}

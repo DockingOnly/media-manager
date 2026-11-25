@@ -9,7 +9,7 @@ from pathlib import Path
 
 from guessit import guessit
 
-from . import core, library
+from . import core, library, mediainfo
 from .core import key_of, norm_title
 
 TV_VERSION = 4  # bump when name reading changes, so saved scans are re-read
@@ -300,7 +300,8 @@ def annotate(items: list, root: Path) -> list:
             listings[key_of(video.parent)] = names
         stem = video.stem.lower()
         it["files"] = {"nfo": f"{stem}.nfo" in names, "thumb": f"{stem}-thumb.jpg" in names,
-                       "subs": library.sub_languages({n: False for n in names}, stem)}
+                       "subs": library.sub_languages({n: False for n in names}, stem),
+                       "subs_in": mediainfo.embedded_subs(video)}
         it["named"] = episode_named(it, root)
         it["mismatch"] = False
         if it["kind"] == "episode" and confirmed(it.get("match")):
@@ -330,7 +331,7 @@ def summaries(items: list, root: Path) -> list:
         missing = tvmeta.missing_episodes(data, have) if data else None
         subs = {}
         for e in episodes:
-            for lang in e["files"]["subs"]:
+            for lang in set(e["files"]["subs"]) | set(e["files"].get("subs_in") or []):
                 subs[lang] = subs.get(lang, 0) + 1
         out.append({
             "key": key, "id": key, "folder": eps[0]["show_dir"] or "(loose files)", "title": title, "year": year,

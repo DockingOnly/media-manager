@@ -119,11 +119,29 @@ ok(len(res) == 1 and res[0]["added"] and "Dune" in res[0]["added"][0] and res[0]
 ok(new.exists() and (lib / "Heat (1995)" / "Heat (1995).mkv").exists(), "nothing is renamed or moved")
 ok(watch.check_once(c, now + 360) == [], "nothing new next time: nothing runs")
 p = c.post("/api/ping").get_json()
-ok(p["watch"]["version"] >= 1 and "1 new movie file: Dune" in p["watch"]["message"] and "match them by hand" in p["watch"]["message"],
+ok(p["watch"]["version"] >= 1 and "1 new movie file: Dune" in p["watch"]["message"],
    f"the page hears what arrived: {p['watch']['message']}")
 (lib / "Heat (1995)" / "Heat (1995).mkv").unlink()
 res = watch.check_once(c, now + 480)
 ok(len(res) == 1 and res[0]["gone"] == 1 and "no longer there" in watch.describe(res[0]), "a file that's gone is noticed too")
+
+# TV: a new episode is scanned in; a step that fails (TMDB unreachable here) doesn't lose the scan
+tv = S / "tvJ"
+(tv / "Show (2001)" / "Season 1").mkdir(parents=True)
+(tv / "Show (2001)" / "Season 1" / "Show - S01E01 - One.mkv").write_bytes(b"one")
+core.save_config(tv_folder=str(tv), watch_steps=["match"])
+r = c.post("/api/tv/scan", json={"folder": str(tv)}).get_json()
+while not c.get(f"/api/job/{r['job']}").get_json()["finished"]:
+    time.sleep(0.05)
+ep2 = tv / "Show (2001)" / "Season 1" / "Show - S01E02 - Two.mkv"
+ep2.write_bytes(b"two")
+os.utime(ep2, (old, old))
+watch.check_once(c, now + 600)
+v = watch.state["version"]
+res = watch.check_once(c, now + 720)
+ok(len(res) == 1 and res[0]["kind"] == "tv" and res[0]["added"] == ["Show S01E02"] and res[0]["steps"] == ["scanned"]
+   and res[0]["problem"] and watch.state["version"] == v + 1 and "tried again next time" in watch.describe(res[0]),
+   f"a new episode is scanned in, and a failed step is reported without losing the scan: {res and watch.describe(res[0])}")
 srv.shutdown()
 shutil.rmtree(S, ignore_errors=True)
 print("done")

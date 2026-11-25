@@ -19,6 +19,7 @@ TV_LIBRARY = BASE / "tv_library.json"  # the last TV scan
 TV_MATCHES = BASE / "tv_matches.json"  # show folder -> TMDB show
 TV_CACHE = BASE / "tv_cache.json"      # TMDB show and episode details, refreshed weekly
 TV_RENAME_LOG = BASE / "tv_rename_log.json"
+PROBES = BASE / "probe_cache.json"      # what ffmpeg said about each video (so it's read once, not every time)
 PORT = 8765
 USER_AGENT = "media-manager/0.8"
 

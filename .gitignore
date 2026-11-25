@@ -26,3 +26,4 @@ tv_library-*.json
 *.part
 *.new
 ratings_cache.json
+probe_cache.json

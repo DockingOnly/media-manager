@@ -172,6 +172,7 @@ def find(job: dict, kind: str) -> dict:
         why = _suggest(kind, described, confirmed)
         out.append({"title": title, "copies": sorted(described, key=_rank, reverse=True), "note": why})
     out.sort(key=lambda g: g["title"].lower())
+    mediainfo.save()
     return {"kind": kind, "groups": out}
 
 

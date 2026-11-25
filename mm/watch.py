@@ -19,7 +19,7 @@ DEFAULT_STEPS = ["match", "nfo", "artwork"]
 SETTLE = 60  # seconds a new file must stay the same size before it's touched
 ART = {"movies": ["poster", "fanart"], "tv": ["poster", "fanart", "season", "thumb"]}
 state = {"last_check": None, "busy": False, "version": 0, "last": None, "error": None, "waiting": []}
-_seen = {}  # path -> (size, mtime) from the previous look
+_seen = {"movies": {}, "tv": {}}  # per library: path -> (size, mtime) from the previous look
 
 
 def settings(cfg: dict = None) -> dict:
@@ -51,17 +51,18 @@ def look(kind: str, root: Path, now: float = None) -> dict:
     known = {it["id"] for it in core.load_scan(kind, root).get("items", [])}
     found = videos(kind, root)
     ready, arriving = [], []
+    seen = _seen.setdefault(kind, {})
     for k, (p, size, mtime) in found.items():
         if k in known:
             continue
-        before = _seen.get(k)
+        before = seen.get(k)
         if before == (size, mtime) and now - mtime >= SETTLE:
             ready.append(p)
         else:
             arriving.append(p)
-        _seen[k] = (size, mtime)
-    for k in [k for k in _seen if k not in found]:
-        del _seen[k]
+        seen[k] = (size, mtime)
+    for k in [k for k in seen if k not in found]:
+        del seen[k]
     return {"ready": ready, "arriving": arriving, "gone": len(known - set(found))}
 
 
@@ -85,20 +86,24 @@ def handle(kind: str, folder: str, steps: list, client) -> dict:
 
     before = {it["id"] for it in core.load_scan(kind, Path(folder)).get("items", [])}
     job(f"{pre}/scan", {"folder": folder, "refresh": True})
-    done = ["scanned"]
+    done, problem = ["scanned"], None
     for step in steps:
-        if step == "match":
-            job(f"{pre}/match-all", {})
-        elif step == "nfo":
-            job(f"{pre}/nfo", {"overwrite": False, "artwork": False})
-        elif step == "artwork":
-            job(f"{pre}/artwork", {"kinds": ART[kind], "replace": False})
-        elif step == "subtitles":
-            if not core.load_config().get("os_key"):
-                continue
-            job(f"{pre}/subtitles", {})
-        elif step == "trailers":
-            job(f"{pre}/trailers", {})
+        try:
+            if step == "match":
+                job(f"{pre}/match-all", {})
+            elif step == "nfo":
+                job(f"{pre}/nfo", {"overwrite": False, "artwork": False})
+            elif step == "artwork":
+                job(f"{pre}/artwork", {"kinds": ART[kind], "replace": False})
+            elif step == "subtitles":
+                if not core.load_config().get("os_key"):
+                    continue
+                job(f"{pre}/subtitles", {})
+            elif step == "trailers":
+                job(f"{pre}/trailers", {})
+        except core.UserError as err:  # the scan is in; the rest is tried again next time
+            problem = f"{step} didn't finish ({err}); it's tried again next time."
+            break
         done.append(step)
     with core.lock:
         if tv:
@@ -115,7 +120,7 @@ def handle(kind: str, folder: str, steps: list, client) -> dict:
         else:
             names.append(m.get("name") or (f"{m['title']} ({m['year']})" if m.get("title") else it["title"]))
     unmatched = sum(1 for it in new if (it.get("match") or {}).get("status") not in core.MATCHED)
-    return {"kind": kind, "time": time.time(), "added": names, "unmatched": unmatched, "steps": done}
+    return {"kind": kind, "time": time.time(), "added": names, "unmatched": unmatched, "steps": done, "problem": problem}
 
 
 def check_once(client=None, now: float = None) -> list:
@@ -141,7 +146,7 @@ def check_once(client=None, now: float = None) -> list:
             r = handle(kind, folder, s["steps"], client)
             r["gone"] = seen["gone"]
             results.append(r)
-            state.update(last=r, error=None, version=state["version"] + 1)
+            state.update(last=r, error=r["problem"], version=state["version"] + 1)
         except core.UserError as err:  # e.g. you started something meanwhile: try again next time
             state["error"] = str(err)
         finally:
@@ -159,8 +164,10 @@ def describe(r: dict) -> str:
         shown = ", ".join(r["added"][:5]) + (f" and {len(r['added']) - 5} more" if len(r["added"]) > 5 else "")
         n = len(r["added"])
         parts.append(f"{n} new {what}{'' if n == 1 else 's'}: {shown}. Done: {', '.join(r['steps'])}.")
-        if r["unmatched"]:
+        if r["unmatched"] and "match" in r["steps"]:
             parts.append(f"{r['unmatched']} couldn't be matched on TMDB by themselves; match them by hand.")
+    if r.get("problem"):
+        parts.append(r["problem"][0].upper() + r["problem"][1:])
     if r.get("gone"):
         parts.append(f"{r['gone']} {what}{'' if r['gone'] == 1 else 's'} no longer there.")
     return " ".join(parts)

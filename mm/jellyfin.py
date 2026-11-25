@@ -168,6 +168,94 @@ def start() -> None:
             time.sleep(2)
             try:
                 flush_once()
+                if not core.job_running():
+                    from . import mediainfo
+                    mediainfo.save()  # keep what ffmpeg said about new files (only the running app does this)
             except Exception:  # never let this stop the app
                 pass
-    threading.Thread(target=loop, daemon=True, name="jellyfin").start()
+    threading.Thread(target=loop, daemon=True, name="background").start()
+
+
+# ---------------------------------------------------------------- Jellyfin's settings that fight this app's files
+
+def _libraries_for_us(folders: list) -> list:
+    """Jellyfin's libraries, each with which of your folders (movies / TV) it holds."""
+    cfg = core.load_config()
+    mine = {"movies": cfg.get("folders") or ([cfg["folder"]] if cfg.get("folder") else []),
+            "tv": cfg.get("tv_folders") or ([cfg["tv_folder"]] if cfg.get("tv_folder") else [])}
+    out = []
+    for f in folders:
+        locs = f.get("Locations") or []
+        holds = {kind: [x for x in paths if any(_inside(to_jellyfin(x), loc) or _inside(loc, to_jellyfin(x)) for loc in locs)]
+                 for kind, paths in mine.items()}
+        out.append({"lib": f, "holds": {k: v for k, v in holds.items() if v}})
+    return out
+
+
+def settings_check() -> dict:
+    """Problems (this app's work won't show), warnings (it can be overwritten) and notes, with fixes where safe."""
+    libs = _libraries_for_us(request("GET", "/Library/VirtualFolders") or [])
+    issues = []
+
+    def add(level, lib, text, fix=None):
+        issues.append({"level": level, "library": lib.get("Name") if lib else "", "library_id": lib.get("ItemId") if lib else "",
+                       "text": text, "fix": fix})
+
+    ours = [x for x in libs if x["holds"]]
+    if not ours:
+        add("problem", None, "None of Jellyfin's libraries holds your movie or TV folders. Add them in Jellyfin (Dashboard → Libraries), "
+                             "or, if Jellyfin sees them under other paths, add a path mapping in Settings.")
+    for x in ours:
+        lib, opts = x["lib"], x["lib"].get("LibraryOptions") or {}
+        ctype = lib.get("CollectionType") or "mixed"
+        if "movies" in x["holds"] and ctype == "tvshows":
+            add("problem", lib, "This is a TV library, but it holds your movie folder, so Jellyfin will treat the movies as shows.")
+        if "tv" in x["holds"] and ctype == "movies":
+            add("problem", lib, "This is a movie library, but it holds your TV folder, so Jellyfin will treat episodes as movies.")
+        if "Nfo" in (opts.get("DisabledLocalMetadataReaders") or []):
+            add("problem", lib, "Jellyfin is set to ignore .nfo files here, so the details and edits this app writes never reach it.", "enable_nfo")
+        if "Nfo" in (opts.get("MetadataSavers") or []):
+            add("warning", lib, "Jellyfin writes its own .nfo files here too, and can overwrite this app's details and your edits.", "no_nfo_saver")
+        fetchers = sorted({f for t in opts.get("TypeOptions") or [] for f in t.get("MetadataFetchers") or []})
+        if fetchers:
+            add("note", lib, f"Jellyfin also looks details up online ({', '.join(fetchers)}). The .nfo files come first; a "
+                             "“Replace all metadata” refresh in Jellyfin can still overwrite your edits.")
+        if (opts.get("AutomaticRefreshIntervalDays") or 0) > 0:
+            add("note", lib, f"Jellyfin refreshes details from the internet every {opts['AutomaticRefreshIntervalDays']} days.")
+    try:
+        nfo_cfg = request("GET", "/System/Configuration/xbmcmetadata") or {}
+    except UserError:
+        nfo_cfg = None
+    if nfo_cfg is not None and not nfo_cfg.get("UserId"):
+        users = request("GET", "/Users") or []
+        add("warning", None, "No Jellyfin user is chosen for watched status in .nfo files (Dashboard → Display → NFO settings), "
+                             "so the watched status in .nfo files (from Trakt, say) is ignored.",
+            "nfo_user" if len(users) == 1 else None)
+    order = {"problem": 0, "warning": 1, "note": 2}
+    issues.sort(key=lambda i: order[i["level"]])
+    return {"issues": issues, "libraries": [{"name": x["lib"].get("Name"), "type": x["lib"].get("CollectionType") or "mixed",
+                                             "yours": sorted(x["holds"])} for x in libs]}
+
+
+def fix(what: str, library_id: str = "") -> dict:
+    """Change one Jellyfin setting (only the ones offered above), then check again."""
+    if what in ("enable_nfo", "no_nfo_saver"):
+        lib = next((f for f in request("GET", "/Library/VirtualFolders") or [] if f.get("ItemId") == library_id), None)
+        if not lib:
+            raise UserError("That Jellyfin library is no longer there. Check again.")
+        opts = dict(lib.get("LibraryOptions") or {})
+        if what == "enable_nfo":
+            opts["DisabledLocalMetadataReaders"] = [r for r in opts.get("DisabledLocalMetadataReaders") or [] if r != "Nfo"]
+        else:
+            opts["MetadataSavers"] = [s for s in opts.get("MetadataSavers") or [] if s != "Nfo"]
+        request("POST", "/Library/VirtualFolders/LibraryOptions", {"Id": library_id, "LibraryOptions": opts})
+    elif what == "nfo_user":
+        users = request("GET", "/Users") or []
+        if len(users) != 1:
+            raise UserError("Choose the user in Jellyfin: Dashboard → Display → NFO settings.")
+        cfg = request("GET", "/System/Configuration/xbmcmetadata") or {}
+        cfg["UserId"] = users[0]["Id"]
+        request("POST", "/System/Configuration/xbmcmetadata", cfg)
+    else:
+        raise UserError("That can't be fixed from here.")
+    return settings_check()

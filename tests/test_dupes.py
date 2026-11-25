@@ -16,7 +16,7 @@ for d in (lib, tv, st, binf):
     shutil.rmtree(d, ignore_errors=True)
 st.mkdir(parents=True)
 binf.mkdir()
-for name in ("CONFIG", "MATCHES", "RENAME_LOG", "LIBRARY", "EDITS", "TV_LIBRARY", "TV_MATCHES", "TV_CACHE", "TV_RENAME_LOG"):
+for name in ("CONFIG", "MATCHES", "RENAME_LOG", "LIBRARY", "EDITS", "TV_LIBRARY", "TV_MATCHES", "TV_CACHE", "TV_RENAME_LOG", "PROBES"):
     setattr(core, name, st / f"{name.lower()}.json")
 core.save_json(core.CONFIG, {"tmdb_key": "x", "folder": str(lib), "tv_folder": str(tv)})
 fake = types.ModuleType("send2trash")
