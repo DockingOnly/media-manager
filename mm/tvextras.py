@@ -36,10 +36,13 @@ def subtitles_run(job: dict, root: Path, langs: list, hearing: str, skip_embedde
             if not needed:
                 continue
             core.set_detail(job, f"{label}: searching")
-            found = subtitles.os_request("GET", "/subtitles", params={
-                "parent_tmdb_id": it["match"]["tmdb_id"], "season_number": it["season"],
-                "episode_number": it["episodes"][0], "moviehash": subtitles.movie_hash(video),
-                "languages": ",".join(needed), "order_by": "download_count", "ai_translated": "exclude"}).get("data", [])
+            params = {"parent_tmdb_id": it["match"]["tmdb_id"], "moviehash": subtitles.movie_hash(video),
+                      "languages": ",".join(needed), "order_by": "download_count", "ai_translated": "exclude"}
+            nums = tvmeta.tmdb_numbers(tvmeta.cached_for(it["match"]) or {}, it["season"], it["episodes"][0]) \
+                if it["match"].get("order") else (it["season"], it["episodes"][0])
+            if nums:  # OpenSubtitles goes by TMDB's numbering
+                params.update(season_number=nums[0], episode_number=nums[1])
+            found = subtitles.os_request("GET", "/subtitles", params=params).get("data", [])
             time.sleep(0.3)
             for lang in needed:
                 pick = subtitles.pick_subtitle(found, lang, None, hearing)
@@ -55,6 +58,7 @@ def subtitles_run(job: dict, root: Path, langs: list, hearing: str, skip_embedde
                 content, ext, remaining = subtitles.fetch_subtitle(pick["file_id"])
                 code = lang if "-" not in lang else lang.split("-")[0] + "-" + lang.split("-")[1].upper()
                 video.with_name(f"{video.stem}.{code}{'.sdh' if pick['hi'] else ''}{ext}").write_bytes(content)
+                core.changed(video)
                 res["downloaded"] += 1
                 res["synced"] += pick["synced"]
                 if remaining is not None:

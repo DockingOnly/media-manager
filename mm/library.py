@@ -5,7 +5,7 @@ from pathlib import Path
 
 from guessit import guessit
 
-from . import core
+from . import core, mediainfo
 from .core import key_of, norm_title
 
 SKIP_FILE = re.compile(r"(^|[\s._-])(sample|trailer)([\s._-]|$)", re.I)
@@ -25,7 +25,7 @@ def skip_dir(name: str) -> bool:
 # Files next to a movie that share its name and belong to it
 SIDECAR_EXTS = core.SUB_EXTS | {".nfo", ".jpg", ".jpeg", ".png", ".webp"}
 
-PARSE_VERSION = 2  # bump when parsing changes, so saved scans are re-read
+PARSE_VERSION = 3  # bump when parsing changes, so saved scans are re-read
 GUESS_OPTS = {"type": "movie", "excludes": ["part"]}  # "Part 2" in a title is a sequel, not disc 2
 SPLIT_PART = re.compile(r"(?P<sep>\s-\s|-|[._ ])(?:cd|dvd|disc|disk|part|pt)[ ._-]?(?P<n>\d{1,2})$", re.I)
 VIDEO_STREAM = re.compile(r"Stream #\d+:\d+[^\n]*?: Video: (\w+)[^\n]*?, (\d{2,5})x(\d{2,5})")
@@ -79,7 +79,7 @@ def resolution_of(width: int, height: int) -> str:
 
 def probe_video(path: Path) -> dict:
     """Read the real resolution and codec from the video itself (for files whose names don't say)."""
-    m = VIDEO_STREAM.search(core.ffmpeg_info(path, timeout=30))
+    m = VIDEO_STREAM.search(mediainfo.text_of(path) or "")  # (kept, so later checks don't read the file again)
     if not m:
         return {}
     codec, width, height = m.group(1), int(m.group(2)), int(m.group(3))
@@ -99,7 +99,7 @@ def scan(root: Path, job: dict = None, label: str = "Reading file names") -> lis
     if job:
         core.job_step(job, label, len(videos))
     # Reuse what we worked out last time for files that haven't changed; only new or changed files are read
-    cache = core.load_json(core.LIBRARY, {})
+    cache = core.load_scan("movies", root)
     known = {it["id"]: it for it in cache.get("items", [])} if cache.get("root") == key_of(root) else {}
     if cache.get("v") != PARSE_VERSION:  # parsing improved: re-read every name once (matches are kept)
         known = {k: {kk: vv for kk, vv in v.items() if kk in ("size", "mtime")} for k, v in known.items()}
@@ -117,10 +117,13 @@ def scan(root: Path, job: dict = None, label: str = "Reading file names") -> lis
             item = {k: v for k, v in old.items() if k not in ("match", "files", "named")}
         else:
             item = parse(path, root)
-        if not item["resolution"] and not item.get("probed"):  # the name doesn't say: ask the video
-            info = probe_video(path)
-            item["resolution"] = info.get("resolution", "")
-            item["codec"] = item["codec"] or info.get("codec", "")
+        if not item.get("probed"):  # ask the video itself (once per file): release names can be wrong
+            info = probe_video(path)  # ('Star Wars 360p' that is really 640x272)
+            if info.get("resolution"):
+                if item["resolution"] and item["resolution"] != info["resolution"]:
+                    item["name_resolution"] = item["resolution"]
+                item["resolution"] = info["resolution"]
+            item["codec"] = info.get("codec") or item["codec"]
             item["probed"] = True
         item["size"] = st.st_size
         item["mtime"] = int(st.st_mtime)
@@ -140,7 +143,7 @@ def scan(root: Path, job: dict = None, label: str = "Reading file names") -> lis
                 it["part"] = None
     follow_renames(known, items)
     try:
-        core.save_json(core.LIBRARY, {"root": key_of(root), "folder": str(root), "items": items, "v": PARSE_VERSION})
+        core.save_scan("movies", root, {"root": key_of(root), "folder": str(root), "items": items, "v": PARSE_VERSION})
     except OSError:
         pass
     return [dict(it) for it in items]
@@ -228,7 +231,8 @@ def own_folder(item: dict, folders: dict, root: Path, confirmed: bool = False) -
 
 
 def sidecars(video: Path) -> list:
-    """Files in the same folder named like the video, such as 'Movie.en.srt' or 'Movie-poster.jpg'."""
+    """Files in the same folder named like the video, such as 'Movie.en.srt' or 'Movie-poster.jpg', and Jellyfin's
+    'Movie.trickplay' folder."""
     out = []
     try:
         entries = list(video.parent.iterdir())
@@ -238,6 +242,9 @@ def sidecars(video: Path) -> list:
     longer = [e.stem for e in entries if e != video and e.is_file() and e.suffix.lower() in core.VIDEO_EXTS
               and len(e.stem) > len(video.stem) and e.stem.startswith(video.stem) and not SKIP_FILE.search(e.stem)]
     for f in entries:
+        if f.is_dir() and f.name.lower() == f"{video.stem}.trickplay".lower():
+            out.append(f)  # Jellyfin's seek-bar previews for this video: they move with it, or Jellyfin rebuilds them
+            continue
         if not (f.is_file() and f != video and f.name.startswith(video.stem) and f.name[len(video.stem)] in ".-"):
             continue
         if any(f.name.startswith(o) for o in longer):
@@ -275,14 +282,28 @@ def sub_languages(names: dict, stem: str) -> list:
     for n in names:
         if n.startswith(stem + ".") and Path(n).suffix in core.SUB_EXTS:
             rest = n[len(stem) + 1:]
-            langs.add(rest.split(".")[0] if "." in rest else "?")
+            code = rest.split(".")[0].lower() if "." in rest else "?"
+            langs.add(mediainfo.LANG2.get(code, code))  # 'eng' and 'en' are the same language
     return sorted(langs)
+
+
+def movie_names(match: dict, item: dict, cfg: dict = None):
+    """A movie's folder name and file name (before any version or part suffix), from the rename patterns.
+    Your edited title and year win over TMDB's."""
+    from . import nfo
+    cfg = core.load_config() if cfg is None else cfg
+    edits = nfo.load_edits(match["tmdb_id"])
+    values = {"title": edits.get("title") or match["title"], "year": edits.get("year") or match.get("year"),
+              "resolution": item.get("resolution", ""), "codec": item.get("codec", ""), "source": item.get("source", ""),
+              "tmdb": match["tmdb_id"]}
+    return core.render(core.pattern("movie_folder", cfg), values), core.render(core.pattern("movie_file", cfg), values)
 
 
 def annotate(items: list, root: Path) -> list:
     """Mark each file with what Jellyfin will find: .nfo, artwork, trailer, subtitles, and correct naming."""
     folders = by_folder(items, root)
     listings = {}
+    cfg = core.load_config()
     for it in items:
         video = Path(root, it["path"])
         folder = video.parent
@@ -301,11 +322,14 @@ def annotate(items: list, root: Path) -> list:
                    or (own and any(n in names for n in ("poster.jpg", "poster.png", "folder.jpg", "cover.jpg"))),
             "trailer": has_trailer(folder, names, stem, own),
             "subs": sub_languages(names, stem),
+            "subs_in": mediainfo.embedded_subs(video),  # tracks inside the video (only if it's been read already)
         }
         m = it.get("match") or {}
-        name = m.get("name") if m.get("status") in core.MATCHED else None
-        # Named for Jellyfin: in a folder called "Title (Year)", with a file name that starts the same way
-        it["named"] = bool(name and folder.name == name and video.stem.startswith(name))
+        it["named"] = False
+        if m.get("status") in core.MATCHED:
+            # Named for Jellyfin: in its folder ("Title (Year)" or your pattern), with a file name that starts right
+            folder_name, file_name = movie_names(m, it, cfg)
+            it["named"] = folder.name == folder_name and video.stem.startswith(file_name)
     return items
 
 

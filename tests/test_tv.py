@@ -53,6 +53,7 @@ w("Seinfeld (1989)/Seinfeld Xtras/Bloopers.mkv", b"x")
 # Loki: no year on the folder, seasons buried in odd folders
 w("Loki/tvshow.nfo", show_nfo(84958))
 w("Loki/Loki (2021)/Season 1/Loki.S01E01.1080p.mkv", b"l1")
+w("Loki/Loki (2021)/Season 1/Loki.S01E01.1080p.trickplay/320 - 10x10/0.jpg", b"tp")  # Jellyfin's seek-bar previews
 w("Loki/Loki (2021) Season 2 S02 (1080p DSNP WEB-DL)/Season 2/Loki.S02E01.1080p.mkv", b"l2")
 # Maul: only the year is missing; its episode is otherwise named right
 w("Maul/tvshow.nfo", show_nfo(289219)); w("Maul/Season 1/Maul - S01E01 - Chapter One.mkv", b"m1")
@@ -126,17 +127,19 @@ ok(shows["Seinfeld (1989)"]["to_rename"] == 1 and shows["Maul"]["to_rename"] == 
 # 2. rename preview
 pv = c.get("/api/tv/rename/preview").get_json()
 plans = {p["name"]: p for p in pv["plans"]}
-ok("Seinfeld (1989)" in plans and len(plans["Seinfeld (1989)"]["changes"]) == 2, f"Seinfeld: only the two-episode file and its subtitle change: {[ch['to'] for ch in plans.get('Seinfeld (1989)', {}).get('changes', [])]}")
+ok("Seinfeld (1989)" in plans and len([ch for ch in plans["Seinfeld (1989)"]["changes"] if "Xtras" not in ch["from"]]) == 2, f"Seinfeld: only the two-episode file and its subtitle change (besides the extras): {[ch['to'] for ch in plans.get('Seinfeld (1989)', {}).get('changes', [])]}")
 ok(any(ch["to"].endswith("Seinfeld - S07E14-E15 - The Cadillac (1) & The Cadillac (2).mkv") for ch in plans["Seinfeld (1989)"]["changes"]), "two-episode file named S07E14-E15 for Jellyfin")
 maul = plans["Maul (2025)"]["changes"]
 ok(len(maul) == 1 and maul[0]["kind"] == "folder", "Maul: just the folder gets its year; the episode inside is already right")
 ok(any(ch["to"].replace("\\", "/") == "Loki (2021)/Season 2/Loki - S02E01 - Ouroboros.mkv" for ch in plans["Loki (2021)"]["changes"]), "Loki: buried episodes go to Loki (2021)/Season N with TMDB titles")
 ok("Aqua Teen Hunger Force (2000)" in plans and plans["Aqua Teen Hunger Force (2000)"]["changes"][0]["to"].endswith("Aqua Teen Hunger Force - S01E02 - Carl's Pissed Boston Freakin' Won.mp4"), "Aqua Teen: the misleading name is fixed")
-ok(not any("Xtras" in ch["from"] for p in pv["plans"] for ch in p["changes"]), "extras are left alone")
+ok([ch["to"].replace("\\", "/") for p in pv["plans"] for ch in p["changes"] if "Xtras" in ch["from"]] == ["Seinfeld (1989)/other/Bloopers.mkv"],
+   "extras in an 'Xtras' folder move into the Jellyfin extras folder that fits (bloopers: 'other')")
 r = job("/api/tv/rename/apply", {"ids": [p["id"] for p in pv["plans"]]})
 t = tree()
 ok("Loki (2021)/Season 1/Loki - S01E01 - Glorious Purpose.mkv" in t and not any(x.startswith("Loki/") for x in t)
    and not (tv / "Loki (2021)" / "Loki (2021)").exists(), "Loki rearranged and the empty old folders removed")
+ok("Loki (2021)/Season 1/Loki - S01E01 - Glorious Purpose.trickplay/320 - 10x10/0.jpg" in t, "Jellyfin's .trickplay folder moved and renamed with its episode")
 ok("Maul (2025)/Season 1/Maul - S01E01 - Chapter One.mkv" in t and "Seinfeld (1989)/Season 7/Seinfeld - S07E14-E15 - The Cadillac (1) & The Cadillac (2).en.srt" in t, "Maul renamed; the subtitle moved with its episode")
 ok(all(s["named"] for s in r["shows"]) and all(s["match"] for s in r["shows"]), "everything named, and every show still matched after its folder was renamed")
 u = c.post("/api/tv/rename/undo").get_json()

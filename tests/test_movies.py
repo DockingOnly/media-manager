@@ -8,7 +8,7 @@ import types
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from mm import core, library, nfo, renamer, subtitles, tmdbapi, trailers, web  # noqa: E402
+from mm import core, subtitles, tmdbapi, trailers, web  # noqa: E402
 
 S = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(tempfile.mkdtemp(prefix="mm-test-"))
 lib, st, binf = S / "libT", S / "stT", S / "binT"

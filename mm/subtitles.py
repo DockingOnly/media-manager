@@ -120,9 +120,12 @@ def lang_names(code: str) -> set:
 
 
 def embedded_sub_langs(video: Path) -> set:
-    """Languages of subtitle tracks built into the video, read with ffmpeg."""
-    info = core.ffmpeg_info(video)
-    return {m.lower() for m in re.findall(r"Stream #\d+:\d+(?:\[\w+\])?\((\w+)\)[^\n]*?: Subtitle", info)}
+    """Languages of the subtitle tracks built into the video (not forced ones, which only cover foreign lines),
+    as both two- and three-letter codes. Read with ffmpeg once, then remembered."""
+    from . import mediainfo
+    info = mediainfo.probe(video) or {}
+    raw = {s["language"].lower() for s in info.get("subtitles", []) if s["language"] and not s["forced"]}
+    return raw | {mediainfo.LANG2[x] for x in raw if x in mediainfo.LANG2}
 
 
 def has_sub_file(video: Path, names: set) -> bool:
@@ -222,6 +225,7 @@ def run(job: dict, root: Path, langs: list, hearing: str, skip_embedded: bool) -
                 # Jellyfin naming: "Movie (Year).en.srt", hearing-impaired as "Movie (Year).en.sdh.srt"
                 code = lang if "-" not in lang else lang.split("-")[0] + "-" + lang.split("-")[1].upper()
                 video.with_name(f"{video.stem}.{code}{'.sdh' if pick['hi'] else ''}{ext}").write_bytes(content)
+                core.changed(video)
                 res["downloaded"] += 1
                 res["synced"] += pick["synced"]
                 if remaining is not None:

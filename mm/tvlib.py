@@ -9,24 +9,25 @@ from pathlib import Path
 
 from guessit import guessit
 
-from . import core, library
+from . import core, library, mediainfo
 from .core import key_of, norm_title
 
-TV_VERSION = 3  # bump when name reading changes, so saved scans are re-read
+TV_VERSION = 4  # bump when name reading changes, so saved scans are re-read
 SXXEYY = re.compile(r"(?<![a-z0-9])S(\d{1,3})[ ._]?E(\d{1,4})((?:[ ._-]*(?:S\1[ ._]?)?E\d{1,4})*)", re.I)
 # Release information that can follow an episode code ('Loki.S01E01.1080p.DSNP.WEB-DL.x265'): not a title
 RELEASE_WORDS = re.compile(r"(?i)\b(?:\d{3,4}p|4k|uhd|hdr\d*|dv|sdr|web(?:[ .-]?(?:dl|rip))?|webrip|bluray|blu[ .-]?ray|brrip|bdrip|"
                            r"hdtv|dvdrip|dvd|remux|proper|repack|internal|x26[45]|h[ .]?26[45]|hevc|avc|xvid|divx|10bit|8bit|"
                            r"aac\d?(?:[ .]\d)?|ac3|eac3|ddp?\d?(?:[ .]\d)?|dts(?:[ .-]?hd)?|truehd|atmos|flac|mp3|"
                            r"dsnp|amzn|hmax|atvp|pcok|pmtp|eng|ita)\b")  # (not words that also appear in titles)
-SEASON_DIR = re.compile(r"^(?:season|series|staffel|saison|temporada)[ ._-]*(\d{1,3})$", re.I)
+SEASON_DIR = re.compile(r"^(?:season|series|staffel|saison|temporada|s)[ ._-]*(\d{1,3})$", re.I)
 SPECIALS = {"specials", "special", "season 0", "season 00"}
 SKIP_DIRS = library.SKIP_DIRS | {"extrathumbs", "extrafanart", "theme-music", "backdrops"}
 SIDE_EXTS = core.SUB_EXTS | {".nfo", ".jpg", ".jpeg", ".png"}
 
 
 def season_folder(season: int) -> str:
-    return "Specials" if season == 0 else f"Season {season}"
+    """'Season 1' (or your pattern); season 0 is always 'Specials', which Jellyfin expects."""
+    return "Specials" if season == 0 else core.render(core.pattern("tv_season_folder"), {"season": season})
 
 
 def episode_code(season: int, episodes: list) -> str:
@@ -64,10 +65,13 @@ def parse(path: Path, root: Path) -> dict:
         episodes = [int(x) for x in (e if isinstance(e, list) else [e])] if e is not None else None
         s = guess.get("season")
         season = s if isinstance(s, int) else None
+        if season == 0 and not re.search(r"(?i)(?<![a-z0-9])(s0+(?![0-9])|0x\d|season[ ._-]*0+\b|specials?\b)", stem):
+            season = None  # 'Show - 001' is absolute episode 1, not season 0 (the reader takes the leading 0 as a season)
     from_folder = folder_season(path, show_dir)
     if season is None:
         season = from_folder
-    if episodes and season is None:
+    guessed = bool(episodes) and season is None
+    if guessed:
         season = 1  # absolute numbering without seasons: assume season 1 (shown as a guess)
     series = str(core.first(guess.get("title")) or "")
     if show_dir is not None:
@@ -77,7 +81,7 @@ def parse(path: Path, root: Path) -> dict:
         "kind": "episode" if episodes else "extra",
         "season": season if episodes else None,
         "episodes": episodes,
-        "season_guessed": bool(episodes) and from_folder is None and not m and guess.get("season") is None,
+        "season_guessed": guessed,
         "series": series,
         # after an explicit S01E02, the episode title is simply what follows it ('Show - S01E02 - Title')
         "ep_title": ((clean_title(stem[m.end():]) if m else "") or str(guess.get("episode_title") or "")) if episodes else "",
@@ -125,7 +129,7 @@ def scan(root: Path, job: dict = None, label: str = "Reading episode names") -> 
                 videos.append(path)
     if job:
         core.job_step(job, label, len(videos))
-    cache = core.load_json(core.TV_LIBRARY, {})
+    cache = core.load_scan("tv", root)
     known = ({it["id"]: it for it in cache.get("items", [])}
              if cache.get("root") == key_of(root) and cache.get("v") == TV_VERSION else {})
     items = []
@@ -145,7 +149,7 @@ def scan(root: Path, job: dict = None, label: str = "Reading episode names") -> 
         item.update(size=st.st_size, mtime=int(st.st_mtime), path=str(path.relative_to(root)), id=key_of(path))
         items.append(item)
     try:
-        core.save_json(core.TV_LIBRARY, {"root": key_of(root), "folder": str(root), "items": items, "v": TV_VERSION})
+        core.save_scan("tv", root, {"root": key_of(root), "folder": str(root), "items": items, "v": TV_VERSION})
     except OSError:
         pass
     return [dict(it) for it in items]
@@ -181,11 +185,19 @@ def confirmed(match) -> bool:
 
 
 def show_name_parts(match: dict, edits: dict = None):
-    """The show's folder name 'Title (Year)' and the title used in episode file names (no year)."""
+    """The show's folder name ('Title (Year)', or your pattern) and the title used in episode file names."""
     edits = edits or {}
     title = edits.get("title") or match["title"]
     year = edits.get("year") or match.get("year")
-    return core.jellyfin_name(title, year), core.safe_name(title)
+    from . import tvmeta
+    tvdb = ((tvmeta.cached(match["tmdb_id"]) or {}).get("show") or {}).get("tvdb_id")
+    values = {"title": title, "year": year, "tmdb": match["tmdb_id"], "tvdb": tvdb}
+    return core.render(core.pattern("tv_show_folder"), values), core.safe_name(title)
+
+
+def episode_values(title: str, season: int, episodes: list, episode_title: str = "", resolution: str = "") -> dict:
+    return {"show": title, "code": episode_code(season, episodes), "season": season, "episode": episodes[0],
+            "episode_title": episode_title, "resolution": resolution}
 
 
 def target_show_dir(root: Path, match: dict) -> Path:
@@ -199,11 +211,20 @@ def same_name(a: str, b: str) -> bool:
     return a == b or norm_title(a) == norm_title(b)
 
 
-def starts_right(stem: str, title: str, season: int, episodes: list) -> bool:
-    """'Show - S01E02 ...': the show's title, then this episode's code in Jellyfin's form."""
+def starts_right(stem: str, title: str, season: int, episodes: list, resolution: str = "") -> bool:
+    """Does the file name follow the episode pattern up to the episode title ('Show - S01E02 ...')? Whatever the
+    episode title says, and ignoring punctuation-only differences."""
+    pat = core.pattern("tv_episode_file")
+    head = pat.split("{episode_title}")[0]
+    want = core.render(head, episode_values(title, season, episodes, "", resolution)) if head.strip() else ""
+    code = episode_code(season, episodes)
     m = SXXEYY.search(stem)
-    return bool(m) and same_name(stem[:m.start()].rstrip(" -._"), title) \
-        and stem[m.start():].upper().startswith(episode_code(season, episodes).upper())
+    if not m or not stem[m.start():].upper().startswith(code.upper()):
+        return False
+    if "{episode_title}" not in pat:
+        return same_name(stem, core.render(pat, episode_values(title, season, episodes, "", resolution)))
+    a, b = norm_title(stem), norm_title(want)
+    return a == b or a.startswith(b + " ")
 
 
 IGNORED_WORDS = {"part", "pt", "chapter"}
@@ -245,16 +266,21 @@ def episode_named(it: dict, root: Path) -> bool:
     folder_name, title = show_name_parts(m, nfo.load_edits(f"tv:{m['tmdb_id']}"))
     path = Path(root, it["path"])
     return (path.parent.name == season_folder(it["season"]) and path.parent.parent.parent == root
-            and same_name(path.parent.parent.name, folder_name) and starts_right(path.stem, title, it["season"], it["episodes"]))
+            and same_name(path.parent.parent.name, folder_name)
+            and starts_right(path.stem, title, it["season"], it["episodes"], it.get("resolution", "")))
 
 
 def sidecars(video: Path) -> list:
-    """Subtitles, .nfo and '-thumb.jpg' named after the episode file."""
+    """Subtitles, .nfo and '-thumb.jpg' named after the episode file, and Jellyfin's '.trickplay' folder."""
     out = []
     try:
         for f in video.parent.iterdir():
-            if f.is_file() and f != video and f.name.startswith(video.stem) and f.suffix.lower() in SIDE_EXTS \
-                    and f.name[len(video.stem)] in ".-":
+            if f.is_dir() and f.name.lower() == f"{video.stem}.trickplay".lower():
+                out.append(f)  # Jellyfin's seek-bar previews: they move with the episode, or Jellyfin rebuilds them
+                continue
+            if f.is_file() and f != video and f.name.startswith(video.stem) and f.name[len(video.stem)] in ".-" and (
+                    f.suffix.lower() in SIDE_EXTS
+                    or (f.suffix.lower() in core.VIDEO_EXTS and f.name[len(video.stem):].lower().startswith("-trailer"))):
                 out.append(f)
     except OSError:
         pass
@@ -274,7 +300,8 @@ def annotate(items: list, root: Path) -> list:
             listings[key_of(video.parent)] = names
         stem = video.stem.lower()
         it["files"] = {"nfo": f"{stem}.nfo" in names, "thumb": f"{stem}-thumb.jpg" in names,
-                       "subs": library.sub_languages({n: False for n in names}, stem)}
+                       "subs": library.sub_languages({n: False for n in names}, stem),
+                       "subs_in": mediainfo.embedded_subs(video)}
         it["named"] = episode_named(it, root)
         it["mismatch"] = False
         if it["kind"] == "episode" and confirmed(it.get("match")):
@@ -283,7 +310,9 @@ def annotate(items: list, root: Path) -> list:
             # A file holding episodes that aren't next to each other (S07E01 + S07E12) can't be written as
             # Jellyfin's range (S07E01-E12 would claim 1 to 12), so it's left as it is, like a title mismatch.
             gap = len(eps) > 1 and eps != list(range(eps[0], eps[-1] + 1))
-            it["mismatch"] = gap or not title_agrees(it, tvmeta.cached(it["match"]["tmdb_id"]))
+            data = tvmeta.cached_for(it["match"])
+            from . import tvsort  # S01E19 when TMDB's season 1 has 18 episodes: not an episode TMDB knows
+            it["mismatch"] = gap or not title_agrees(it, data) or tvsort.not_on_list(data, it["season"], eps)
     return items
 
 
@@ -298,11 +327,11 @@ def summaries(items: list, root: Path) -> list:
         have = {(e["season"], n) for e in episodes for n in e["episodes"]}
         names = {n.lower() for n in os.listdir(show_dir)} if show_dir and show_dir.is_dir() else set()
         title, year = show_title_year(show_dir.name) if show_dir else (eps[0]["series"], None)
-        data = tvmeta.cached(m["tmdb_id"]) if confirmed(m) else None
+        data = tvmeta.cached_for(m) if confirmed(m) else None
         missing = tvmeta.missing_episodes(data, have) if data else None
         subs = {}
         for e in episodes:
-            for lang in e["files"]["subs"]:
+            for lang in set(e["files"]["subs"]) | set(e["files"].get("subs_in") or []):
                 subs[lang] = subs.get(lang, 0) + 1
         out.append({
             "key": key, "id": key, "folder": eps[0]["show_dir"] or "(loose files)", "title": title, "year": year,

@@ -42,8 +42,10 @@ def build_nfo(d: dict) -> bytes:
     if keys:  # lets Jellyfin play the trailer from YouTube when there is no local file
         sub(movie, "trailer", f"plugin://plugin.video.youtube/?action=play_video&videoid={keys[0]}")
     if d.get("belongs_to_collection"):
-        coll = sub(movie, "set")
-        sub(coll, "name", d["belongs_to_collection"].get("name"))
+        c = d["belongs_to_collection"]
+        coll = sub(movie, "set", tmdbcolid=c.get("id"))  # Jellyfin and Kodi read the collection's TMDB id from here
+        sub(coll, "name", c.get("name"))
+        sub(movie, "uniqueid", c.get("id"), type="tmdbSet")
     for g in d.get("genres", []):
         sub(movie, "genre", g.get("name"))
     for c in d.get("production_countries", []):
@@ -73,12 +75,13 @@ def download(url: str, dst: Path) -> None:
     tmp = dst.with_name(dst.name + ".part")
     tmp.write_bytes(data)
     os.replace(tmp, dst)
+    core.changed(dst)
 
 
 # ---------------------------------------------------------------- reading, editing and merging .nfo files
 
 XML_HEAD = b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
-EDITABLE = ("title", "originaltitle", "sorttitle", "year", "tagline", "plot", "genres", "set", "mpaa")
+EDITABLE = ("title", "originaltitle", "sorttitle", "year", "tagline", "plot", "genres", "tags", "set", "mpaa")
 # Elements this app writes. When an existing .nfo is updated, only these are replaced; everything else
 # (watched status, play count, tags, ratings, file details from tinyMediaManager...) is kept.
 MANAGED = {"title", "originaltitle", "plot", "outline", "tagline", "runtime", "year", "premiered", "rating", "mpaa",
@@ -151,6 +154,7 @@ def read_nfo_root(root) -> dict:
         "year": int(year) if year.isdigit() else None, "tagline": text(root, "tagline"), "plot": text(root, "plot"),
         "runtime": text(root, "runtime"), "mpaa": text(root, "mpaa") or text(root, "certification"),
         "premiered": text(root, "premiered"), "genres": [g.text.strip() for g in root.findall("genre") if g.text],
+        "tags": [t.text.strip() for t in root.findall("tag") if t.text],
         "set": (root.findtext("set/name") or root.findtext("set") or "").strip(),
         "directors": [d.text.strip() for d in root.findall("director") if d.text],
         "studios": [s.text.strip() for s in root.findall("studio") if s.text][:3],
@@ -196,15 +200,16 @@ def apply_edits(root, edits: dict) -> None:
         set_text(root, "mpaa", edits["mpaa"])
         if root.find("certification") is not None:
             set_text(root, "certification", edits["mpaa"])
-    if "genres" in edits:
-        old = root.findall("genre")
-        at = list(root).index(old[0]) if old else len(root)
-        for g in old:
-            root.remove(g)
-        for i, name in enumerate(edits["genres"]):
-            el = ET.Element("genre")
-            el.text = name
-            root.insert(at + i, el)
+    for field, tag in (("genres", "genre"), ("tags", "tag")):
+        if field in edits:
+            old = root.findall(tag)
+            at = list(root).index(old[0]) if old else len(root)
+            for g in old:
+                root.remove(g)
+            for i, name in enumerate(edits[field]):
+                el = ET.Element(tag)
+                el.text = name
+                root.insert(at + i, el)
     if "set" in edits:
         for s in root.findall("set"):
             root.remove(s)
@@ -226,8 +231,9 @@ def load_edits(tmdb_id) -> dict:
     return core.load_json(core.EDITS, {}).get(str(tmdb_id), {})
 
 
-def write_nfo(path: Path, fresh_xml, tmdb_id, overwrite: bool) -> bool:
-    """Create or update one .nfo. Returns False when it exists and overwrite is off."""
+def write_nfo(path: Path, fresh_xml, tmdb_id, overwrite: bool, video: Path = None, ratings=None, tmdb_rating=None) -> bool:
+    """Create or update one .nfo, with the video's technical details. Returns False when it exists and
+    overwrite is off."""
     edits = load_edits(tmdb_id)
     existing = parse_xml(path.read_bytes()) if path.exists() else None
     if existing is not None and not overwrite:
@@ -238,7 +244,14 @@ def write_nfo(path: Path, fresh_xml, tmdb_id, overwrite: bool) -> bool:
     else:
         root = parse_xml(fresh_xml)
     apply_edits(root, edits)
+    if ratings:
+        from . import ratings as _ratings
+        _ratings.add_to(root, ratings, *(tmdb_rating or (None, None)))
+    if video is not None:
+        from . import mediainfo
+        mediainfo.add_fileinfo(root, video)
     path.write_bytes(to_bytes(root))
+    core.changed(path)
     return True
 
 
@@ -246,8 +259,14 @@ def write_movie_files(tmdb_id, group: list, folders: dict, root: Path, overwrite
     result = {"nfo": 0, "images": 0, "skipped": 0}
     d = tmdbapi.tmdb(f"/movie/{tmdb_id}", append_to_response="credits,release_dates,external_ids,videos")
     xml = build_nfo(d)
+    from . import ratings
+    try:  # IMDb, Rotten Tomatoes and Metacritic from OMDb, when you've set a key
+        found = ratings.for_imdb(d.get("imdb_id") or d.get("external_ids", {}).get("imdb_id"))
+    except core.UserError as err:
+        found, result["ratings_error"] = None, str(err)
     for it in group:
-        if write_nfo(Path(root, it["path"]).with_suffix(".nfo"), xml, tmdb_id, overwrite):
+        video = Path(root, it["path"])
+        if write_nfo(video.with_suffix(".nfo"), xml, tmdb_id, overwrite, video, found, (d.get("vote_average"), d.get("vote_count"))):
             result["nfo"] += 1
         else:
             result["skipped"] += 1
@@ -279,7 +298,7 @@ def write_all(job: dict, root: Path, overwrite: bool, artwork: bool) -> dict:
     folders = library.by_folder(items, root)
     core.job_step(job, "Writing .nfo files" + (" and artwork" if artwork else ""), len(groups))
     totals = {"nfo": 0, "images": 0, "skipped": 0}
-    failed = []
+    failed, notes = [], set()
 
     def one(entry):
         tmdb_id, group = entry
@@ -290,6 +309,8 @@ def write_all(job: dict, root: Path, overwrite: bool, artwork: bool) -> dict:
             with core.job_lock:
                 for k in totals:
                     totals[k] += r[k]
+                if r.get("ratings_error"):
+                    notes.add(r["ratings_error"])
         except (core.TmdbError, OSError, urllib.error.URLError) as err:
             failed.append({"name": group[0]["match"]["name"], "error": str(err)})
         finally:
@@ -299,4 +320,5 @@ def write_all(job: dict, root: Path, overwrite: bool, artwork: bool) -> dict:
         list(pool.map(one, groups.items()))
     with core.lock:
         items = [dict(i) for i in library.rescan()]  # refresh the .nfo/artwork checkmarks
-    return {"movies": len(groups), "failed": failed, "cancelled": job["cancel"], "items": items, **totals}
+    return {"movies": len(groups), "failed": failed, "cancelled": job["cancel"], "items": items,
+            "ratings_note": " ".join(sorted(notes)), **totals}

@@ -13,10 +13,13 @@ MATCHES = BASE / "matches.json"        # file path -> TMDB match
 RENAME_LOG = BASE / "rename_log.json"  # rename batches, for undo
 LIBRARY = BASE / "library.json"        # the last scan, so the library opens instantly next time
 EDITS = BASE / "edits.json"            # your own metadata edits, by TMDB id (they survive .nfo rewrites)
+MOVIE_CACHE = BASE / "movie_cache.json"  # which collection each movie belongs to (from TMDB)
+COLLECTIONS = BASE / "collections.json"  # collection details from TMDB
 TV_LIBRARY = BASE / "tv_library.json"  # the last TV scan
 TV_MATCHES = BASE / "tv_matches.json"  # show folder -> TMDB show
 TV_CACHE = BASE / "tv_cache.json"      # TMDB show and episode details, refreshed weekly
 TV_RENAME_LOG = BASE / "tv_rename_log.json"
+PROBES = BASE / "probe_cache.json"      # what ffmpeg said about each video (so it's read once, not every time)
 PORT = 8765
 USER_AGENT = "media-manager/0.8"
 
@@ -53,6 +56,25 @@ def load_json(path: Path, default):
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return default
+
+
+_read_cache = {}
+
+
+def read_json(path: Path, default):
+    """load_json for read-only use: parsed once, and again only when the file changes. Callers must not
+    modify what it returns (the TV cache is read hundreds of times while the TV list is built)."""
+    try:
+        st = path.stat()
+    except OSError:
+        return default
+    stamp = (st.st_mtime_ns, st.st_size)
+    hit = _read_cache.get(str(path))
+    if hit and hit[0] == stamp:
+        return hit[1]
+    data = load_json(path, default)
+    _read_cache[str(path)] = (stamp, data)
+    return data
 
 
 def save_json(path: Path, data) -> None:
@@ -104,6 +126,58 @@ def jellyfin_name(title: str, year) -> str:
     return f"{safe_name(title)} ({year})" if year else safe_name(title)
 
 
+# ---------------------------------------------------------------- rename patterns
+
+PATTERNS = {  # setting -> (default, placeholders allowed, placeholders required)
+    "movie_folder": ("{title} ({year})", {"title", "year", "resolution", "codec", "source", "tmdb"}, {"title"}),
+    "movie_file": ("{title} ({year})", {"title", "year", "resolution", "codec", "source", "tmdb"}, {"title"}),
+    "tv_show_folder": ("{title} ({year})", {"title", "year", "tmdb", "tvdb"}, {"title"}),
+    "tv_season_folder": ("Season {season}", {"season"}, {"season"}),
+    "tv_episode_file": ("{show} - {code} - {episode_title}", {"show", "code", "season", "episode", "episode_title", "resolution"}, {"code"}),
+}
+TOKEN = re.compile(r"\{(\w+)(?::(\d+))?\}")
+
+
+def pattern(name: str, cfg: dict = None) -> str:
+    cfg = load_config() if cfg is None else cfg
+    return (cfg.get("patterns") or {}).get(name) or PATTERNS[name][0]
+
+
+def check_pattern(name: str, text: str) -> str:
+    """Refuse a pattern Jellyfin couldn't work with. Returns the cleaned-up pattern."""
+    text = " ".join((text or "").split())
+    if not text:
+        return PATTERNS[name][0]
+    _, allowed, required = PATTERNS[name]
+    used = {m.group(1) for m in TOKEN.finditer(text)}
+    unknown = used - allowed
+    if unknown:
+        raise UserError(f"“{{{sorted(unknown)[0]}}}” can't be used there. Use: " + ", ".join(f"{{{t}}}" for t in sorted(allowed)) + ".")
+    missing = required - used
+    if missing:
+        raise UserError(f"That pattern needs {{{sorted(missing)[0]}}}" +
+                        (" (the S01E02 part Jellyfin reads)." if "code" in missing else "."))
+    if re.search(r'[<>:"/\\|?*]', TOKEN.sub("", text)):
+        raise UserError('Patterns can\'t contain any of < > : " / \\ | ? *')
+    return text
+
+
+def render(text: str, values: dict) -> str:
+    """Fill in a pattern, then tidy what an empty placeholder leaves behind ('Title ()', 'A -  - B')."""
+    def one(m):
+        v = values.get(m.group(1))
+        if v in (None, ""):
+            return ""
+        if m.group(2) and str(v).isdigit():
+            return str(int(v)).zfill(int(m.group(2)))
+        return str(v)
+    out = TOKEN.sub(one, text)
+    out = re.sub(r"\(\s*\)|\[\s*\]|\{\s*\}", "", out)
+    out = re.sub(r"(\s*-\s*){2,}", " - ", out)
+    out = re.sub(r"\s+", " ", out).strip(" -._")
+    return safe_name(out) if out else "Untitled"
+
+
 def norm_title(text: str) -> str:
     import unicodedata
     text = unicodedata.normalize("NFKD", str(text or "")).encode("ascii", "ignore").decode()
@@ -127,11 +201,34 @@ def same_file(a: Path, b: Path) -> bool:
         return False
 
 
+_changes = {}  # path -> when the app last changed it (for telling Jellyfin)
+_changes_lock = threading.Lock()
+
+
+def changed(*paths) -> None:
+    """Note that the app wrote, moved or recycled these files, so Jellyfin can be told to look again."""
+    now = time.time()
+    with _changes_lock:
+        for p in paths:
+            _changes[str(p)] = now
+
+
+def take_changes(quiet_for: float = 0) -> list:
+    """The paths changed since last time, once nothing has changed for quiet_for seconds (else [])."""
+    with _changes_lock:
+        if not _changes or time.time() - max(_changes.values()) < quiet_for:
+            return []
+        out = list(_changes)
+        _changes.clear()
+        return out
+
+
 def move(src: Path, dst: Path) -> None:
     if dst.exists() and not same_file(src, dst):
         raise OSError(f"“{dst.name}” already exists")
     dst.parent.mkdir(parents=True, exist_ok=True)
     os.rename(src, dst)  # same drive, so this is instant and keeps the file intact
+    changed(src, dst)
 
 
 def remove_empty_dirs(paths, root: Path) -> None:
@@ -157,6 +254,7 @@ def is_network_path(path: Path) -> bool:
 
 def discard(path: Path) -> None:
     """Recycle Bin when there is one; network drives have none, so the file or folder is deleted."""
+    changed(path)
     if is_network_path(path):
         shutil.rmtree(path) if path.is_dir() else path.unlink()
         return
@@ -164,7 +262,62 @@ def discard(path: Path) -> None:
         from send2trash import send2trash
     except ImportError:
         raise UserError("Deleting needs a new library. Close the app and run run.bat again to install it.")
+    # Windows deletes for good, without asking, anything the Recycle Bin can't take: paths over 260 characters,
+    # or more than the bin holds. Check first, so "to the Recycle Bin" always means restorable.
+    size, longest = tree_stats(path)
+    cap = recycle_capacity(path)
+    if cap is not None and size > cap:
+        raise UserError(f"“{path.name}” is {size / 1e9:.1f} GB, more than this drive's Recycle Bin holds ({cap / 1e9:.1f} GB), "
+                        "so Windows would delete it for good. Delete it in File Explorer if you're sure, or make the Recycle Bin bigger.")
+    if longest >= MAX_BIN_PATH:  # move it up to a short name at the top of the same drive first (instant, same drive)
+        short = Path(os.path.splitdrive(str(path.resolve()))[0] + os.sep) / f"~mm-recycle-{time.time_ns() % 10**9}{path.suffix}"
+        if longest - len(str(path)) + len(str(short)) >= MAX_BIN_PATH:
+            raise UserError(f"“{path.name}” has paths too long for the Recycle Bin, so Windows would delete it for good. "
+                            "Delete it in File Explorer if you're sure.")
+        os.rename(path, short)
+        path = short
     send2trash(str(path))
+
+
+MAX_BIN_PATH = 259  # Windows' MAX_PATH (260) less the terminating character
+
+
+def tree_stats(path: Path):
+    """(total bytes, longest full path) of a file or a folder and everything inside it."""
+    if not path.is_dir():
+        return path.stat().st_size, len(str(path))
+    size, longest = 0, len(str(path))
+    for root, dirs, files in os.walk(path):
+        for n in dirs + files:
+            full = os.path.join(root, n)
+            longest = max(longest, len(full))
+            if n in files:
+                try:
+                    size += os.stat(full).st_size
+                except OSError:
+                    pass
+    return size, longest
+
+
+def recycle_capacity(path: Path):
+    """Bytes this drive's Recycle Bin holds (Windows' per-drive setting), or None if unknown."""
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes
+        import winreg
+        buf = ctypes.create_unicode_buffer(64)
+        drive = os.path.splitdrive(str(path.resolve()))[0] + "\\"
+        if not ctypes.windll.kernel32.GetVolumeNameForVolumeMountPointW(drive, buf, 64):
+            return None
+        guid = buf.value[buf.value.index("{"):buf.value.index("}") + 1]
+        key = rf"Software\Microsoft\Windows\CurrentVersion\Explorer\BitBucket\Volume\{guid}"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as k:
+            if winreg.QueryValueEx(k, "NukeOnDelete")[0]:
+                return 0  # the Recycle Bin is switched off for this drive
+            return int(winreg.QueryValueEx(k, "MaxCapacity")[0]) * 1024 * 1024
+    except (OSError, ValueError, ImportError):
+        return None
 
 
 def ffmpeg_exe() -> str:
@@ -235,6 +388,45 @@ def start_job(kind: str, label: str, total: int, work) -> str:
 
     threading.Thread(target=runner, daemon=True).start()
     return job["id"]
+
+
+# ---------------------------------------------------------------- several library folders
+
+def _scan_file(base: Path, root) -> Path:
+    import hashlib
+    return base.with_name(f"{base.stem}-{hashlib.sha1(key_of(root).encode()).hexdigest()[:10]}{base.suffix}")
+
+
+def load_scan(kind: str, root) -> dict:
+    """The saved scan of one library folder (each folder has its own, so switching between them is instant).
+    Falls back to the single file older versions kept."""
+    base = TV_LIBRARY if kind == "tv" else LIBRARY
+    data = load_json(_scan_file(base, root), {})
+    if not data:
+        old = load_json(base, {})
+        data = old if old.get("root") == key_of(root) else {}
+    return data
+
+
+def save_scan(kind: str, root, data: dict) -> None:
+    save_json(_scan_file(TV_LIBRARY if kind == "tv" else LIBRARY, root), data)
+
+
+def remember_folder(kind: str, folder: str) -> dict:
+    """Make a folder the current one, and remember it for the Library dropdown (most recent first)."""
+    key = "tv_folders" if kind == "tv" else "folders"
+    current = "tv_folder" if kind == "tv" else "folder"
+    with lock:
+        cfg = load_config()
+        known = [f for f in (cfg.get(key) or ([cfg[current]] if cfg.get(current) else [])) if key_of(f) != key_of(folder)]
+        return save_config(**{current: folder, key: [folder] + known[:11]})
+
+
+def forget_folder(kind: str, folder: str) -> dict:
+    key = "tv_folders" if kind == "tv" else "folders"
+    with lock:
+        cfg = load_config()
+        return save_config(**{key: [f for f in cfg.get(key) or [] if key_of(f) != key_of(folder)]})
 
 
 def require_tv_scan() -> Path:

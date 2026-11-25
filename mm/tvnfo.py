@@ -88,7 +88,7 @@ def build_episode(data: dict, season: int, number: int):
         sub(root, "director", d)
     for w in dict.fromkeys(e["writers"]):
         sub(root, "credits", w)
-    sub(root, "thumb", image_url(e["still_path"], "w780"))
+    sub(root, "thumb", e.get("still_url") or image_url(e.get("still_path"), "w780"))
     return root
 
 
@@ -113,7 +113,15 @@ def write_show(show_dir: Path, data: dict, tmdb_id, overwrite: bool) -> bool:
     if existing is not None:
         merge_into(existing, fresh, SHOW_MANAGED)
     nfo.apply_edits(root, nfo.load_edits(f"tv:{tmdb_id}"))
+    from . import ratings
+    try:  # IMDb, Rotten Tomatoes and Metacritic for the show, from OMDb, when you've set a key
+        found = ratings.for_imdb(data["show"].get("imdb_id"))
+    except core.UserError:
+        found = None
+    if found:
+        ratings.add_to(root, found, data["show"].get("vote_average"))
     path.write_bytes(nfo.to_bytes(root))
+    core.changed(path)
     return True
 
 
@@ -127,6 +135,7 @@ def write_season(season_dir: Path, data: dict, season: int, overwrite: bool) -> 
         merge_into(existing, fresh, {"seasonnumber", "title", "plot", "premiered", "year"})
         fresh = existing
     path.write_bytes(nfo.to_bytes(fresh))
+    core.changed(path)
     return True
 
 
@@ -155,7 +164,11 @@ def write_episode(video: Path, data: dict, season: int, numbers: list, overwrite
                     if el is not None and new.find(tag) is None:
                         new.append(el)
             roots.append(new)
+    from . import mediainfo
+    for r in roots:  # each entry carries the file's technical details, as Kodi and Jellyfin expect
+        mediainfo.add_fileinfo(r, video)
     path.write_bytes(nfo.to_bytes_all(roots))
+    core.changed(path)
     return "written"
 
 
@@ -173,7 +186,7 @@ def write_all(job: dict, root: Path, overwrite: bool) -> dict:
         m = eps[0]["match"]
         try:
             core.set_detail(job, m["name"])
-            data = tvmeta.show_data(m["tmdb_id"])
+            data = tvmeta.data_for(m)
             show_dir = root / eps[0]["show_dir"] if eps[0].get("show_dir") else None
             if show_dir and write_show(show_dir, data, m["tmdb_id"], overwrite):
                 res["show_nfos"] += 1

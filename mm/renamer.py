@@ -8,16 +8,18 @@ from . import core, library
 from .core import key_of, rel, same_file
 
 
-def version_stems(group: list, videos: list, name: str) -> list:
+def version_stems(group: list, videos: list, names) -> list:
     """The new file name (without extension) for each file of one movie. Parts get '-part1'; several versions
     get ' - 1080p', ' - 720p'; two versions with the same resolution get ' (2)'. A file whose name already
     fits keeps it, so copies never swap names."""
+    names = names if isinstance(names, list) else [names] * len(group)  # each file's name from the pattern
+    by_resolution = "{resolution}" in core.pattern("movie_file")  # versions already differ by resolution
     unparted = [it for it in group if not it["part"]]
     bases = []
-    for it in group:
+    for it, name in zip(group, names):
         if it["part"]:
             bases.append(f"{name}-part{it['part']}")
-        elif len(unparted) > 1:
+        elif len(unparted) > 1 and not by_resolution:
             bases.append(f"{name} - {it['resolution'] or 'version'}")
         else:
             bases.append(name)
@@ -29,6 +31,13 @@ def version_stems(group: list, videos: list, name: str) -> list:
             if stem.lower() not in taken:
                 stems[i] = stem
                 taken.add(stem.lower())
+        elif len(unparted) > 1 and not group[i]["part"] and not by_resolution:
+            # your own label for a version ('Star Wars (1977) - Theatrical', '... - Special Edition'): kept
+            label = re.fullmatch(re.escape(names[i]) + r" - (?!part\d)(.+)", video.stem, re.I)
+            placeholder = label and re.fullmatch(r"(?i)(?:\d{3,4}[pi]|4k|uhd|[hs]d|version|other|copy|alt|\d+)(?: \(\d+\))?", label.group(1).strip())
+            if label and not placeholder and video.stem.lower() not in taken:
+                stems[i] = video.stem
+                taken.add(video.stem.lower())
     for i in range(len(group)):  # then: everything else gets the next free name
         if stems[i] is None:
             stem, n = bases[i], 2
@@ -51,8 +60,10 @@ def rename_plan() -> dict:
             groups.setdefault(m["tmdb_id"], []).append(it)
 
     plans, claimed = [], {}
+    cfg = core.load_config()
     for tmdb_id, group in groups.items():
-        name = group[0]["match"]["name"]
+        name = library.movie_names(group[0]["match"], group[0], cfg)[0]  # the folder name
+        file_names = [library.movie_names(it["match"], it, cfg)[1] for it in group]
         videos = [Path(root, it["path"]) for it in group]
         parent = videos[0].parent
         own = (len({key_of(v.parent) for v in videos}) == 1
@@ -82,7 +93,14 @@ def rename_plan() -> dict:
             target_dir = parent if parent.name == name else parent / name
             here_dir = None
 
-        stems = version_stems(group, videos, name)
+        spread = sorted({rel(v.parent, root) or "(the library folder)" for v in videos})
+        if len(spread) > 1:
+            # Files matched to one movie but sitting in different folders: usually a wrong match (a sequel
+            # matched as the first film). Moving them together would pull a film out of its own folder.
+            plan["reason"] = ("Its files are in different folders (" + "; ".join(spread) + "). Check each one is really "
+                              "this movie (open it and use Change match if not); if they are, put them in one folder first.")
+
+        stems = version_stems(group, videos, file_names)
         for it, video, stem in zip(group, videos, stems):
             dst = target_dir / (stem + video.suffix)
             plan["videos"].append({"src": str(video), "dst": str(dst)})
@@ -91,6 +109,8 @@ def rename_plan() -> dict:
                 f_dst = target_dir / (stem + f.name[len(video.stem):])
                 if f_here.name == f_dst.name and key_of(f_here.parent) == key_of(f_dst.parent):
                     continue
+                if any(library.skip_dir(part) for part in f_dst.relative_to(root).parts[:-1]):
+                    plan["reason"] = f"“{rel(f_dst, root)}” is inside a hidden or extras folder."
                 if key_of(f_dst) not in binned and f_dst.exists() and not same_file(f_dst, f_here if f_here.exists() else f):
                     plan["reason"] = plan["reason"] or f"“{rel(f_dst, root)}” already exists."
                 plan["ops"].append({"kind": "file", "src": str(f_here), "dst": str(f_dst)})

@@ -16,7 +16,7 @@ def tv_scan():
     root = Path(folder)
     if not folder or not root.is_dir():
         return jsonify(error=f"Folder not found: {folder or '(empty)'}. Check the path and try again."), 400
-    core.save_config(tv_folder=folder)
+    core.remember_folder("tv", folder)
     refresh = bool(data.get("refresh"))
 
     def work(job):
@@ -26,8 +26,8 @@ def tv_scan():
             if same:
                 before = {it["id"] for it in core.tv_state["items"]}
             else:
-                cache = core.load_json(core.TV_LIBRARY, {})
-                before = {it["id"] for it in cache.get("items", [])} if cache.get("root") == core.key_of(root) else None
+                cache = core.load_scan("tv", root)
+                before = {it["id"] for it in cache.get("items", [])} if cache else None
             core.tv_state["root"] = root
             tvlib.rescan(job, "Checking for changes" if refresh else "Reading episode names")
             after = {it["id"] for it in core.tv_state["items"]}
@@ -47,8 +47,8 @@ def tv_library():
         return jsonify(shows=None, folder=folder, missing=True)
     with core.lock:
         if core.tv_state["root"] is None or core.key_of(core.tv_state["root"]) != core.key_of(root):
-            cache = core.load_json(core.TV_LIBRARY, {})
-            if cache.get("root") != core.key_of(root) or cache.get("v") != tvlib.TV_VERSION:
+            cache = core.load_scan("tv", root)
+            if not cache or cache.get("v") != tvlib.TV_VERSION:
                 return jsonify(shows=None, folder=folder)
             core.tv_state["root"] = root
             core.tv_state["items"] = cache.get("items", [])
@@ -102,8 +102,20 @@ def tv_refresh():
     m = eps[0]["match"]
     if not tvlib.confirmed(m):
         raise UserError("Match this show first.")
-    tvmeta.show_data(m["tmdb_id"], refresh=True)
+    tvmeta.data_for(m, refresh=True)
     return jsonify(tvshow.detail(key))
+
+
+@app.get("/api/tv/orders")
+def tv_orders():
+    """The episode orders this show can follow, and how well each fits your files."""
+    return jsonify(tvshow.order_fit(request.args.get("key", "")))
+
+
+@app.post("/api/tv/order")
+def tv_order():
+    d = body()
+    return jsonify(tvshow.set_order(d.get("key", ""), d.get("order") or None, d.get("season_orders") or {}))
 
 
 @app.post("/api/tv/edit")
