@@ -222,6 +222,7 @@ def run(job: dict, root: Path, langs: list, hearing: str, skip_embedded: bool) -
                 # Jellyfin naming: "Movie (Year).en.srt", hearing-impaired as "Movie (Year).en.sdh.srt"
                 code = lang if "-" not in lang else lang.split("-")[0] + "-" + lang.split("-")[1].upper()
                 video.with_name(f"{video.stem}.{code}{'.sdh' if pick['hi'] else ''}{ext}").write_bytes(content)
+                core.changed(video)
                 res["downloaded"] += 1
                 res["synced"] += pick["synced"]
                 if remaining is not None:

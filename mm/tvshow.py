@@ -248,6 +248,7 @@ def edit(key: str, fields: dict, reset: bool = False) -> dict:
             if existing is not None and not reset:
                 nfo.apply_edits(existing, all_edits.get(edit_key, {}))
                 path.write_bytes(nfo.to_bytes(existing))
+                core.changed(path)
             else:
                 tvnfo.write_show(show_dir, data, m["tmdb_id"], overwrite=True)
                 if reset:
@@ -255,6 +256,7 @@ def edit(key: str, fields: dict, reset: bool = False) -> dict:
                     for lock in el.findall("lockdata"):
                         el.remove(lock)
                     path.write_bytes(nfo.to_bytes(el))
+                    core.changed(path)
     return detail(key)
 
 

@@ -200,11 +200,34 @@ def same_file(a: Path, b: Path) -> bool:
         return False
 
 
+_changes = {}  # path -> when the app last changed it (for telling Jellyfin)
+_changes_lock = threading.Lock()
+
+
+def changed(*paths) -> None:
+    """Note that the app wrote, moved or recycled these files, so Jellyfin can be told to look again."""
+    now = time.time()
+    with _changes_lock:
+        for p in paths:
+            _changes[str(p)] = now
+
+
+def take_changes(quiet_for: float = 0) -> list:
+    """The paths changed since last time, once nothing has changed for quiet_for seconds (else [])."""
+    with _changes_lock:
+        if not _changes or time.time() - max(_changes.values()) < quiet_for:
+            return []
+        out = list(_changes)
+        _changes.clear()
+        return out
+
+
 def move(src: Path, dst: Path) -> None:
     if dst.exists() and not same_file(src, dst):
         raise OSError(f"“{dst.name}” already exists")
     dst.parent.mkdir(parents=True, exist_ok=True)
     os.rename(src, dst)  # same drive, so this is instant and keeps the file intact
+    changed(src, dst)
 
 
 def remove_empty_dirs(paths, root: Path) -> None:
@@ -230,6 +253,7 @@ def is_network_path(path: Path) -> bool:
 
 def discard(path: Path) -> None:
     """Recycle Bin when there is one; network drives have none, so the file or folder is deleted."""
+    changed(path)
     if is_network_path(path):
         shutil.rmtree(path) if path.is_dir() else path.unlink()
         return

@@ -181,6 +181,7 @@ def save(video: Path, own: bool, kind: str, url: str, replace: bool) -> Path:
     if dst.exists():  # (an old file of the same name, when replacing)
         core.discard(dst)
     os.replace(tmp, dst)
+    core.changed(dst)
     return dst
 
 

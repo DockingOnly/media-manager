@@ -185,6 +185,7 @@ def edit(item_id: str, fields: dict, reset: bool = False) -> dict:
             if existing is not None and not reset:
                 nfo.apply_edits(existing, edits)  # change just what you edited; keep everything else
                 path.write_bytes(nfo.to_bytes(existing))
+                core.changed(path)
             else:  # no .nfo yet, or going back to TMDB's data: refresh from TMDB, keeping unmanaged parts
                 if fresh is None:
                     d = tmdbapi.tmdb(f"/movie/{tmdb_id}", append_to_response="credits,release_dates,external_ids,videos")
@@ -195,6 +196,7 @@ def edit(item_id: str, fields: dict, reset: bool = False) -> dict:
                     for el in root_el.findall("lockdata"):
                         root_el.remove(el)
                     path.write_bytes(nfo.to_bytes(root_el))
+                    core.changed(path)
 
         # The Jellyfin name (used by the renamer) follows an edited title or year
         matches = core.load_json(core.MATCHES, {})

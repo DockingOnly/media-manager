@@ -121,6 +121,7 @@ def write_show(show_dir: Path, data: dict, tmdb_id, overwrite: bool) -> bool:
     if found:
         ratings.add_to(root, found, data["show"].get("vote_average"))
     path.write_bytes(nfo.to_bytes(root))
+    core.changed(path)
     return True
 
 
@@ -134,6 +135,7 @@ def write_season(season_dir: Path, data: dict, season: int, overwrite: bool) -> 
         merge_into(existing, fresh, {"seasonnumber", "title", "plot", "premiered", "year"})
         fresh = existing
     path.write_bytes(nfo.to_bytes(fresh))
+    core.changed(path)
     return True
 
 
@@ -166,6 +168,7 @@ def write_episode(video: Path, data: dict, season: int, numbers: list, overwrite
     for r in roots:  # each entry carries the file's technical details, as Kodi and Jellyfin expect
         mediainfo.add_fileinfo(r, video)
     path.write_bytes(nfo.to_bytes_all(roots))
+    core.changed(path)
     return "written"
 
 

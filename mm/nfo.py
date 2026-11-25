@@ -75,6 +75,7 @@ def download(url: str, dst: Path) -> None:
     tmp = dst.with_name(dst.name + ".part")
     tmp.write_bytes(data)
     os.replace(tmp, dst)
+    core.changed(dst)
 
 
 # ---------------------------------------------------------------- reading, editing and merging .nfo files
@@ -250,6 +251,7 @@ def write_nfo(path: Path, fresh_xml, tmdb_id, overwrite: bool, video: Path = Non
         from . import mediainfo
         mediainfo.add_fileinfo(root, video)
     path.write_bytes(to_bytes(root))
+    core.changed(path)
     return True
 
 

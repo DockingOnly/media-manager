@@ -169,6 +169,7 @@ def sync_movies(job: dict, root: Path, clear: bool) -> dict:
         r = nfo.parse_xml(path.read_bytes())
         if r is not None and set_watched(r, p, last, clear):
             path.write_bytes(nfo.to_bytes(r))
+            core.changed(path)
             res["updated"] += 1
     with core.lock:
         res["items"] = library.current_items()
@@ -208,6 +209,7 @@ def sync_tv(job: dict, root: Path, clear: bool) -> dict:
             changed |= set_watched(r, p, last, clear)
         if changed:
             path.write_bytes(nfo.to_bytes_all(roots))
+            core.changed(path)
             res["updated"] += 1
     res.update(tvlib.current())
     return res

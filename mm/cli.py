@@ -4,6 +4,7 @@
     .venv\\Scripts\\python app.py movies D:\\Media\\Movies scan match nfo
     .venv\\Scripts\\python app.py tv D:\\Media\\Shows scan match rename --apply
     .venv\\Scripts\\python app.py movies D:\\Media\\Movies export movies.csv
+    .venv\\Scripts\\python app.py watch      (watch for new files, as set in Settings, until you close it)
 
 It runs the app's own code in this process (no browser, no server), with the same settings and saved data.
 Renaming only shows what would change unless you add --apply.
@@ -150,6 +151,26 @@ def run(argv=None) -> int:
     except KeyboardInterrupt:
         print("\nStopped.", file=sys.stderr)
         return 130
+    return 0
+
+
+def watch_forever() -> int:
+    """app.py watch: look for new files every few minutes (Settings: how often, and which steps), and tell Jellyfin."""
+    from . import core, jellyfin, watch, web
+    if web.port_in_use(core.PORT):
+        print("The media manager is already running; it watches for new files itself while watching is on in Settings.")
+        return 1
+    s = watch.settings()
+    if not s["on"]:
+        print("Watching is off. Turn it on in Settings (Watch for new files) first.")
+        return 1
+    print(f"Watching your library folders every {s['minutes']} minutes ({', '.join(['scan'] + s['steps'])}). Close this window to stop.")
+    jellyfin.start()
+    say = lambda text: print(time.strftime("%H:%M ") + text, flush=True)
+    try:
+        watch.loop(say)
+    except KeyboardInterrupt:
+        print("\nStopped.")
     return 0
 
 

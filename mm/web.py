@@ -9,7 +9,8 @@ from urllib.parse import urlsplit
 
 from flask import Flask, Response, jsonify, request
 
-from . import artwork, bulk, collections, core, dupes, export, leftovers, library, movie, nfo, renamer, subtitles, tmdbapi, trailers, trakt
+from . import (artwork, bulk, collections, core, dupes, export, jellyfin, leftovers, library, movie, nfo, renamer, subtitles,
+               tmdbapi, trailers, trakt, watch)
 from .core import UserError
 
 app = Flask(__name__, static_folder=str(core.BASE / "static"), static_url_path="")
@@ -70,7 +71,10 @@ def settings_view(cfg: dict) -> dict:
             "trakt_id_hint": (cfg.get("trakt_id") or "")[-4:], "has_trakt_secret": bool(cfg.get("trakt_secret")),
             "trakt_connected": trakt.connected(),
             "has_omdb_key": bool(cfg.get("omdb_key")), "omdb_key_hint": (cfg.get("omdb_key") or "")[-4:],
-            "has_fanart_key": bool(cfg.get("fanart_key")), "fanart_key_hint": (cfg.get("fanart_key") or "")[-4:]}
+            "has_fanart_key": bool(cfg.get("fanart_key")), "fanart_key_hint": (cfg.get("fanart_key") or "")[-4:],
+            "jellyfin_url": cfg.get("jellyfin_url") or "", "has_jellyfin_key": bool(cfg.get("jellyfin_key")),
+            "jellyfin_key_hint": (cfg.get("jellyfin_key") or "")[-4:], "jellyfin_map": cfg.get("jellyfin_map") or "",
+            "jellyfin_auto": cfg.get("jellyfin_auto", True), "watch": watch.settings(cfg)}
 
 
 @app.get("/api/config")
@@ -117,6 +121,31 @@ def api_settings():
         changes["fanart_key"] = fanart_key
     if data.get("fanart_key_clear"):
         changes["fanart_key"] = ""
+    jf_info = None
+    if "jellyfin_url" in data:
+        jf_url = (data.get("jellyfin_url") or "").strip().rstrip("/")
+        jf_key = (data.get("jellyfin_key") or "").strip()
+        jf_map = (data.get("jellyfin_map") or "").strip()
+        old = jellyfin.settings()
+        if jf_url:
+            jf_url = jellyfin.check_url(jf_url)
+            if (jf_url, jf_key or old["key"], jf_map) != (old["url"], old["key"], old["map"]):
+                info = jellyfin.check(jf_url, jf_key or old["key"], jf_map)  # raises if Jellyfin can't be reached
+                jf_info = f"Connected to {info['server']} (Jellyfin {info['version']})." + (" " + " ".join(info["warnings"]) if info["warnings"] else "")
+        changes.update(jellyfin_url=jf_url, jellyfin_map=jf_map, jellyfin_auto=bool(data.get("jellyfin_auto", True)))
+        if jf_key:
+            changes["jellyfin_key"] = jf_key
+        if not jf_url:
+            changes["jellyfin_key"] = ""
+    if isinstance(data.get("watch"), dict):
+        w = data["watch"]
+        try:
+            minutes = int(w.get("minutes") or 10)
+        except (TypeError, ValueError):
+            raise UserError("Enter how often to look for new files, in minutes.")
+        changes.update(watch_on=bool(w.get("on")), watch_keep_alive=bool(w.get("keep_alive")),
+                       watch_minutes=max(2, min(minutes, 24 * 60)),
+                       watch_steps=[s for s in (w.get("steps") or []) if s in watch.STEPS])
     if "sub_langs" in data:
         changes["sub_langs"] = ", ".join(subtitles.sub_langs(data.get("sub_langs"))) or "en"
     # OpenSubtitles: only check when something changed; a blank password keeps the saved one
@@ -140,7 +169,37 @@ def api_settings():
     cfg = core.save_config(**changes)
     return jsonify({**settings_view(cfg), "verified": bool(key), "os_info": os_info,
                     "omdb_info": "OMDb accepted the key." if omdb_key else None,
-                    "fanart_info": "fanart.tv accepted the key." if fanart_key else None})
+                    "fanart_info": "fanart.tv accepted the key." if fanart_key else None, "jellyfin_info": jf_info})
+
+
+@app.post("/api/jellyfin/test")
+def api_jellyfin_test():
+    d = body()
+    s = jellyfin.settings()
+    url = jellyfin.check_url(d.get("url") or s["url"])
+    return jsonify(jellyfin.check(url, (d.get("key") or "").strip() or s["key"], d.get("map") if "map" in d else None))
+
+
+@app.post("/api/jellyfin/refresh")
+def api_jellyfin_refresh():
+    return jsonify(jellyfin.refresh_all())
+
+
+@app.post("/api/watch/now")
+def api_watch_now():
+    """Look for new files now, in the background (the page follows it like any other task)."""
+    if watch.state["busy"]:
+        raise UserError("Already looking for new files.")
+    if core.job_running():
+        raise UserError("Wait for the current task to finish first.")
+
+    def run():
+        try:
+            watch.check_once(now=None)
+        except Exception as err:
+            watch.state["error"] = str(err)
+    threading.Thread(target=run, daemon=True).start()
+    return jsonify(ok=True)
 
 
 @app.post("/api/trakt/connect")
@@ -488,7 +547,14 @@ alive = {"last": None, "bye": None}
 @app.post("/api/ping")
 def api_ping():
     alive["last"], alive["bye"] = time.time(), None
-    return jsonify(ok=True, version=APP_VERSION)
+    with core.job_lock:
+        running = next(({"id": j["id"], "label": j["label"]} for j in core.jobs.values() if not j["finished"]), None)
+    w = watch.state
+    return jsonify(ok=True, version=APP_VERSION, job=running,
+                   watch={"version": w["version"], "busy": w["busy"], "message": watch.describe(w["last"]),
+                          "kind": (w["last"] or {}).get("kind"), "waiting": w["waiting"], "error": w["error"],
+                          "last_check": w["last_check"]},
+                   jellyfin={**jellyfin.status, "configured": jellyfin.configured()})
 
 
 @app.post("/api/bye")
@@ -500,7 +566,9 @@ def api_bye():
 def watchdog() -> None:
     while True:
         time.sleep(2)
-        if alive["last"] is None or core.job_running():  # never opened yet, or busy: keep going
+        if alive["last"] is None or core.job_running() or watch.state["busy"]:  # never opened yet, or busy: keep going
+            continue
+        if watch.settings()["on"] and watch.settings()["keep_alive"]:  # watching for new files after the page closes
             continue
         now = time.time()
         if (alive["bye"] and now - alive["bye"] > BYE_GRACE) or now - alive["last"] > LOST_AFTER:
@@ -631,6 +699,8 @@ def main() -> None:
             raise SystemExit(1)
         print("Closed it.")
     threading.Thread(target=watchdog, daemon=True).start()
+    jellyfin.start()
+    watch.start()
     threading.Timer(3.0, open_browser_unless_reconnected, args=(port,)).start()
     print(f"Media manager is running at http://127.0.0.1:{port}")
     print("Closing the browser tab shuts it down. You can also close this window.")

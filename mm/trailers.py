@@ -53,6 +53,7 @@ def tag_trailer(path: Path, tmdb_id, key: str) -> None:
                         "-metadata", f"comment=media-manager tmdb={tmdb_id} youtube={key}", str(tmp)],
                        check=True, capture_output=True, timeout=120, creationflags=core.NO_WINDOW)
         os.replace(tmp, path)
+        core.changed(path)
     except Exception:
         tmp.unlink(missing_ok=True)  # an untagged trailer still works fine
 

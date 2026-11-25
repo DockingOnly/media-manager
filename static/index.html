@@ -60,6 +60,8 @@ th.num,td.num{text-align:right}
 td.file{color:var(--muted)}
 td.file div{max-width:25vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tag{display:inline-flex;align-items:center;gap:6px}
+.linkish{background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;text-decoration:underline dotted;text-underline-offset:3px;cursor:pointer}
+.linkish:hover{color:var(--accent,#4db6e6)}
 .tag::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor}
 .tag.r{color:var(--ready)}.tag.t{color:var(--todo)}.tag.n{color:var(--muted)}
 .mbtn{display:flex;align-items:center;gap:8px;background:none;border:0;padding:2px 4px;color:var(--ink);font-weight:400;text-align:left;border-radius:4px}
@@ -216,6 +218,30 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
   </div>
   <p class="note">Brings your Trakt watched status (watched, play count, last watched) into the .nfo files, with <strong>Sync watched from Trakt</strong>. Trakt needs each app registered: on trakt.tv go to Settings → Your API Apps → New Application, give it any name, enter <code>urn:ietf:wg:oauth:2.0:oob</code> as the redirect URI, save, then paste the Client ID and Secret here and choose Save settings, then Connect. Jellyfin reads watched status from .nfo files for the user chosen under Dashboard → Display → NFO settings.</p>
   <p id="trMsg" class="note" role="status"></p>
+  <h2 style="margin-top:18px">Jellyfin (optional)</h2>
+  <div class="row">
+    <div><label for="jfUrl">Server address</label><input id="jfUrl" placeholder="http://localhost:8096" spellcheck="false" style="width:260px"></div>
+    <div><label for="jfKey">API key</label><input id="jfKey" type="password" autocomplete="off" spellcheck="false" style="width:300px"></div>
+    <button class="ghost" id="jfTest" type="button">Test</button> <button class="ghost" id="jfRefresh" type="button">Refresh Jellyfin now</button>
+  </div>
+  <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="jfAuto" checked> Tell Jellyfin after every change (renames, .nfo files, artwork, subtitles, trailers, deletions)</label>
+  <details style="margin-top:8px"><summary class="note">Jellyfin sees the files under other paths (Docker, another computer)?</summary>
+    <label for="jfMap" class="note">One mapping per line, this computer's folder first:</label>
+    <textarea id="jfMap" rows="3" spellcheck="false" placeholder="D:\Media => /media" style="width:100%;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px"></textarea></details>
+  <p class="note">Jellyfin then refreshes just the movies and shows that changed (it waits about a minute first, its usual delay), so new names, details and artwork show up without a full library scan. Create the key in Jellyfin under Dashboard → API Keys. It stays on this computer.</p>
+  <p id="jfMsg" class="note" role="status"></p>
+  <h2 style="margin-top:18px">Watch for new files</h2>
+  <label style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input type="checkbox" id="wOn"> Look for new files every <input id="wMin" inputmode="numeric" style="width:60px" aria-label="Minutes between looks"> minutes, and once each has finished copying:</label>
+  <div class="row" style="gap:14px;margin:6px 0 0 26px">
+    <label><input type="checkbox" name="wstep" value="match"> Match on TMDB</label>
+    <label><input type="checkbox" name="wstep" value="nfo"> Write .nfo files</label>
+    <label><input type="checkbox" name="wstep" value="artwork"> Download artwork</label>
+    <label><input type="checkbox" name="wstep" value="subtitles"> Download subtitles</label>
+    <label><input type="checkbox" name="wstep" value="trailers"> Download trailers</label>
+  </div>
+  <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="wKeep"> Keep watching after I close this page (the app's black window stays open; close it to stop)</label>
+  <p class="note">Each step only fills in what's missing, so nothing you already have changes. Renaming and moving always wait for you: you'll see what arrived and what needs renaming. To watch without opening the app, run <code>.venv\Scripts\python app.py watch</code> (for example from Task Scheduler at log-on). <button class="ghost small" id="wNow" type="button">Look now</button></p>
+  <p id="wMsg" class="note" role="status"></p>
   <h2 style="margin-top:18px">Rename patterns</h2>
   <p class="note" style="margin-top:0">How the renamer names folders and files. Placeholders in curly brackets are filled in; empty ones (a missing year, say) are tidied away. Season 0 is always “Specials”, and episode names must include {code} (the S01E02 part Jellyfin reads). <button class="ghost small" id="patReset" type="button">Reset to defaults</button></p>
   <div class="pats">
@@ -476,8 +502,8 @@ const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const MOVIE_COLS=[["sel",""],["del",""],["match","Movie"],["has","Has"],["named","Jellyfin"],["video","Video"],["size","Size","num"],["path","File"]];
 const TV_COLS=[["sel",""],["del",""],["match","Show"],["eps","Episodes"],["has","Has"],["named","Jellyfin"],["size","Size","num"],["folder","Folder"]];
-const MOVIE_FILTERS=[["all","All movies"],["todo","Needs renaming"],["ready","Named for Jellyfin"],["matched","Matched on TMDB"],["review","Needs review"],["unmatched","Not matched"],["no-nfo","Missing .nfo"],["no-art","Missing artwork"],["no-trailer","Missing trailer"],["no-subs","Missing subtitles"],["dups","More than one copy"]];
-const TV_FILTERS=[["all","All shows"],["missing","Missing episodes"],["todo","Needs renaming"],["ready","Named for Jellyfin"],["matched","Matched on TMDB"],["review","Needs review"],["unmatched","Not matched"],["no-nfo","Missing .nfo files"],["no-art","Missing artwork"],["no-trailer","Missing trailer"],["no-subs","Missing subtitles"]];
+const MOVIE_FILTERS=[["all","All movies"],["attention","Needs attention"],["todo","Needs renaming"],["ready","Named for Jellyfin"],["matched","Matched on TMDB"],["review","Needs review"],["unmatched","Not matched"],["no-nfo","Missing .nfo"],["no-art","Missing artwork"],["no-trailer","Missing trailer"],["no-subs","Missing subtitles"],["dups","More than one copy"]];
+const TV_FILTERS=[["all","All shows"],["attention","Needs attention"],["missing","Missing episodes"],["todo","Needs renaming"],["ready","Named for Jellyfin"],["matched","Matched on TMDB"],["review","Needs review"],["unmatched","Not matched"],["no-nfo","Missing .nfo files"],["no-art","Missing artwork"],["no-trailer","Missing trailer"],["no-subs","Missing subtitles"]];
 const ART_KINDS={movies:[["poster","Poster"],["fanart","Backdrop"],["logo","Logo"],["landscape","Thumbnail"],["banner","Banner"],["clearart","Clear art"],["disc","Disc art"]],
   tv:[["poster","Poster"],["fanart","Backdrop"],["logo","Logo"],["landscape","Thumbnail"],["banner","Banner"],["clearart","Clear art"],["season","Season posters"],["thumb","Episode thumbnails"]]};
 let mode=localStorage.getItem("mm-mode")==="tv"?"tv":"movies";
@@ -514,11 +540,13 @@ function showJob(j){
     const pct=Math.min(100,Math.round(j.done/j.total*100));
     bar.classList.remove("indet");$("#pFill").style.width=pct+"%";bar.setAttribute("aria-valuenow",pct);
     $("#pCount").textContent=`${j.done.toLocaleString()} of ${j.total.toLocaleString()} · ${pct}%`;
+    document.title=`${pct}% · ${$("#appTitle").textContent}`;
   }else{
     bar.classList.add("indet");bar.removeAttribute("aria-valuenow");$("#pCount").textContent=`${Math.round(j.elapsed||0)} s`;
   }
 }
 function finish(msg,err,count){
+  document.title=(document.hidden?(err?"⚠ ":"✓ "):"")+$("#appTitle").textContent;
   prog(err?"fail":"done");const bar=$("#pBar");bar.hidden=false;bar.classList.remove("indet");
   $("#pFill").style.width="100%";bar.setAttribute("aria-valuenow",100);
   $("#pDetail").textContent="";$("#pLabel").textContent=(err?"":"✓ ")+msg;if(count!==undefined)$("#pCount").textContent=count;
@@ -568,6 +596,7 @@ function hasCell(r){
 }
 function visible(r,show){
   switch(show){
+    case"attention":return!r.named||!ok(r.match)||!(r.files||{}).nfo||!(r.files||{}).art;
     case"todo":return!r.named;case"ready":return r.named;
     case"no-nfo":return!(r.files||{}).nfo;case"no-art":return!(r.files||{}).art;
     case"no-trailer":return!(r.files||{}).trailer;case"no-subs":return!((r.files||{}).subs||[]).length;
@@ -587,14 +616,17 @@ function render(){
   $("#tbl tbody").innerHTML=list.map(r=>`<tr>${selCell(r)}<td><button class="delbtn" data-del="${esc(r.id)}" aria-label="Delete ${esc(r.title)}" title="Delete…">${TRASH}</button></td><td>${matchCell(r)}</td><td>${hasCell(r)}</td><td><span class="tag ${r.named?"r":"t"}">${r.named?"Named":"Needs renaming"}</span></td><td>${esc(videoText(r))}</td><td class="num">${size(r.size)}</td><td class="file" title="${esc(r.path)}"><div>${esc(r.path)}</div></td></tr>`).join("");
   $("#tbl").hidden=!list.length;
   $("#msg").hidden=!!list.length;
-  if(!list.length)$("#msg").textContent=rows.length?"No movies match this filter.":"No video files found in this folder.";
+  if(!list.length)$("#msg").innerHTML=rows.length?'No movies match this filter. <button class="ghost small" data-showall>Show everything</button>':"No video files found in this folder.";
 }
+const pick=(f,html,n)=>n?`<button class="linkish" data-filter="${f}" title="Show only these">${html}</button>`:html;
+function setFilter(f){$("#show").value=f;$("#filter").value="";saveView();render();$("#tbl").scrollIntoView({block:"start",behavior:"smooth"})}
+$("#counts").onclick=e=>{const b=e.target.closest("[data-filter]");if(b)setFilter(b.dataset.filter)};
 function summary(sec){
   if(mode==="tv")return summaryTv();
   const n=rows.length,good=rows.filter(r=>r.named).length,todo=n-good;countCopies();
   const dups=Object.values(copies).filter(c=>c>1).length;
   const matched=rows.filter(r=>ok(r.match)).length,review=rows.filter(r=>r.match&&r.match.status==="review").length;
-  $("#counts").innerHTML=`<strong>${n}</strong> movies found. <strong>${good}</strong> named for Jellyfin; <strong>${todo}</strong> need renaming. TMDB: <strong>${matched}</strong> matched, <strong>${review}</strong> need review.`+(dups?` <strong>${dups}</strong> ${dups===1?"movie has":"movies have"} more than one copy.`:"");
+  $("#counts").innerHTML=`<strong>${n}</strong> movies found. <strong>${good}</strong> named for Jellyfin; ${pick("todo",`<strong>${todo}</strong> need renaming`,todo)}. TMDB: <strong>${matched}</strong> matched, ${pick("review",`<strong>${review}</strong> need review`,review)}.`+(dups?` ${pick("dups",`<strong>${dups}</strong> ${dups===1?"movie has":"movies have"} more than one copy`,dups)}.`:"");
   $("#mr").style.width=n?good/n*100+"%":"0";
   $("#mt").style.width=n?todo/n*100+"%":"0";
   $("#summary").hidden=$("#tools").hidden=$("#actions").hidden=false;
@@ -628,11 +660,23 @@ async function loadLibrary(){
   }catch(e){status(e.message,true)}
 }
 $("#folder").onkeydown=e=>{if(e.key==="Enter")$("#scan").click()};
-$("#filter").oninput=$("#show").onchange=render;
+function saveView(){localStorage.setItem("mm-view-"+mode,JSON.stringify({show:$("#show").value,q:$("#filter").value,key,dir}))}
+function restoreView(){
+  try{const v=JSON.parse(localStorage.getItem("mm-view-"+mode)||"{}");
+    if(v.show&&[...$("#show").options].some(o=>o.value===v.show))$("#show").value=v.show;
+    $("#filter").value=v.q||"";if(v.key&&COLS.some(c=>c[0]===v.key)){key=v.key;dir=v.dir===-1?-1:1}}catch{}
+}
+$("#filter").oninput=$("#show").onchange=()=>{saveView();render()};
+// 4. "/" jumps to the filter box; Esc in it clears it
+document.addEventListener("keydown",e=>{
+  if(e.key==="/"&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!(e.target instanceof Element&&e.target.closest("input,textarea,select,[contenteditable]"))&&!document.querySelector("dialog[open]")){e.preventDefault();$("#filter").focus();$("#filter").select()}
+});
+$("#filter").onkeydown=e=>{if(e.key==="Escape"&&$("#filter").value){e.preventDefault();$("#filter").value="";saveView();render()}};
 $("#tbl").onclick=e=>{
   const mb=e.target.closest(".mbtn");if(mb)return mode==="tv"?openShow(mb.dataset.id):openDetail(mb.dataset.id);
   const db=e.target.closest(".delbtn");if(db)return mode==="tv"?tvDelete(db.dataset.del,"show"):openDelete(db.dataset.del);
-  const th=e.target.closest("th");if(!th||!th.dataset.k)return;const k=th.dataset.k;dir=k===key?-dir:1;key=k;render();$(`#tbl th[data-k="${k}"]`)?.focus()};
+  const th=e.target.closest("th");if(!th||!th.dataset.k)return;const k=th.dataset.k;dir=k===key?-dir:1;key=k;saveView();render();$(`#tbl th[data-k="${k}"]`)?.focus()};
+$("#msg").onclick=e=>{if(e.target.closest("[data-showall]"))setFilter("all")};
 $("#tbl").onkeydown=e=>{if(e.key==="Enter"&&e.target.matches("th"))e.target.click()};
 
 /* ---------- settings ---------- */
@@ -653,15 +697,33 @@ function showSettings(c){
   $("#omdbKey").value="";$("#omdbKey").placeholder=c.has_omdb_key?`Saved (ends in ${c.omdb_key_hint})`:"Optional";
   $("#fanKey").value="";$("#fanKey").placeholder=c.has_fanart_key?`Saved (ends in ${c.fanart_key_hint})`:"Optional";
   $("#subLangs").value=c.sub_langs||"en";$("#sLangs").value=c.sub_langs||"en";$("#sHear").value=c.sub_hearing||"normal";
+  $("#jfUrl").value=c.jellyfin_url||"";$("#jfKey").value="";$("#jfKey").placeholder=c.has_jellyfin_key?`Saved (ends in ${c.jellyfin_key_hint})`:"From Dashboard → API Keys";
+  $("#jfMap").value=c.jellyfin_map||"";$("#jfAuto").checked=c.jellyfin_auto!==false;$("#jfRefresh").disabled=!c.has_jellyfin_key;
+  const w=c.watch||{};$("#wOn").checked=!!w.on;$("#wMin").value=w.minutes||10;$("#wKeep").checked=!!w.keep_alive;
+  $$('input[name="wstep"]').forEach(x=>x.checked=(w.steps||[]).includes(x.value));
 }
+function jfFields(){return {url:$("#jfUrl").value.trim(),key:$("#jfKey").value.trim(),map:$("#jfMap").value}}
+$("#jfTest").onclick=async()=>{const done=busy($("#jfTest"),"Testing…");
+  try{const d=await api("/api/jellyfin/test",jfFields());
+    $("#jfMsg").innerHTML=`<span class="tag r">Connected to ${esc(d.server)} (Jellyfin ${esc(d.version)}). Libraries: ${esc(d.libraries.map(l=>l.name).join(", ")||"none")}.</span>`
+      +d.warnings.map(x=>`<div class="err">${esc(x)}</div>`).join("")}
+  catch(e){$("#jfMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}done()};
+$("#jfRefresh").onclick=async()=>{const done=busy($("#jfRefresh"),"Asking…");
+  try{await api("/api/jellyfin/refresh",{});$("#jfMsg").innerHTML='<span class="tag r">Jellyfin is scanning your libraries.</span>'}
+  catch(e){$("#jfMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}done()};
+$("#wNow").onclick=async()=>{
+  try{await api("/api/watch/now",{});$("#wMsg").textContent="Looking for new files… (new files are handled once they've finished copying)";setTimeout(ping,1500)}
+  catch(e){$("#wMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}};
 $("#setBtn").onclick=()=>{const p=$("#settings");p.hidden=!p.hidden;$("#setBtn").setAttribute("aria-expanded",!p.hidden);if(!p.hidden)$("#key").focus()};
 $("#saveSet").onclick=async()=>{
   const done=busy($("#saveSet"),"Checking…");
   try{const d=await api("/api/settings",{tmdb_key:$("#key").value,language:$("#lang").value,
       os_key:$("#osKey").value,os_user:$("#osUser").value,os_pass:$("#osPass").value,sub_langs:$("#subLangs").value,
       yt_login:$("#ytLogin").value,yt_cookie_file:$("#ytFile").value,fanart_key:$("#fanKey").value,omdb_key:$("#omdbKey").value,trakt_id:$("#trId").value,trakt_secret:$("#trSecret").value,
+      jellyfin_url:$("#jfUrl").value.trim(),jellyfin_key:$("#jfKey").value.trim(),jellyfin_map:$("#jfMap").value,jellyfin_auto:$("#jfAuto").checked,
+      watch:{on:$("#wOn").checked,minutes:$("#wMin").value,keep_alive:$("#wKeep").checked,steps:$$('input[name="wstep"]:checked').map(x=>x.value)},
       patterns:Object.fromEntries(PAT_NAMES.map(k=>[k,$("#pat_"+k).value]))});showSettings(d);
-    const notes=[d.verified&&"TMDB accepted the key.",d.os_info,d.omdb_info,d.fanart_info,"Settings saved."].filter(Boolean).join(" ");
+    const notes=[d.verified&&"TMDB accepted the key.",d.os_info,d.omdb_info,d.fanart_info,d.jellyfin_info,"Settings saved."].filter(Boolean).join(" ");
     $("#setMsg").innerHTML=`<span class="tag r">${esc(notes)}</span>`}
   catch(e){$("#setMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}
   done();
@@ -1033,6 +1095,7 @@ const tvHasCount=r=>(r.has.nfo?1:0)+(r.has.art?1:0)+(r.has.trailer?1:0)+(subsOf(
 function tvVisible(r,f){
   const full=c=>c>=r.files;
   switch(f){
+    case"attention":return!r.named||!ok(r.match)||!r.has.nfo||!full(r.has.ep_nfo)||!r.has.art;
     case"missing":return r.missing>0;case"todo":return!r.named;case"ready":return r.named;
     case"matched":return ok(r.match);case"review":return r.match&&r.match.status==="review";
     case"unmatched":return!r.match||r.match.status==="none";
@@ -1060,14 +1123,14 @@ function renderTv(){
     return `<tr>${selCell(r)}<td><button class="delbtn" data-del="${esc(r.id)}" aria-label="Delete ${esc(r.title)}" title="Delete show…">${TRASH}</button></td><td>${matchCell(r)}</td><td>${eps}</td><td>${tvHasCell(r)}</td>
       <td><span class="tag ${r.named?"r":"t"}">${r.named?"Named":plural(r.to_rename,"file")+" to rename"}</span></td><td class="num">${size(r.size)}</td><td class="file" title="${esc(r.folder)}"><div>${esc(r.folder)}</div></td></tr>`}).join("");
   $("#tbl").hidden=!list.length;$("#msg").hidden=!!list.length;
-  if(!list.length)$("#msg").textContent=shows.length?"No shows match this filter.":"No episodes found in this folder.";
+  if(!list.length)$("#msg").innerHTML=shows.length?'No shows match this filter. <button class="ghost small" data-showall>Show everything</button>':"No episodes found in this folder.";
 }
 function summaryTv(){
   const n=shows.length,good=shows.filter(r=>r.named).length,eps=shows.reduce((a,r)=>a+r.episodes,0);
   const matched=shows.filter(r=>ok(r.match)).length,review=shows.filter(r=>r.match&&r.match.status==="review").length;
   const missing=shows.reduce((a,r)=>a+(r.missing||0),0);
-  $("#counts").innerHTML=`<strong>${n}</strong> shows, <strong>${eps.toLocaleString()}</strong> episodes. <strong>${good}</strong> named for Jellyfin; <strong>${n-good}</strong> need renaming. TMDB: <strong>${matched}</strong> matched, <strong>${review}</strong> need review.`+
-    (missing?` <strong>${missing}</strong> aired ${missing===1?"episode is":"episodes are"} missing.`:"");
+  $("#counts").innerHTML=`<strong>${n}</strong> shows, <strong>${eps.toLocaleString()}</strong> episodes. <strong>${good}</strong> named for Jellyfin; ${pick("todo",`<strong>${n-good}</strong> need renaming`,n-good)}. TMDB: <strong>${matched}</strong> matched, ${pick("review",`<strong>${review}</strong> need review`,review)}.`+
+    (missing?` ${pick("missing",`<strong>${missing}</strong> aired ${missing===1?"episode is":"episodes are"} missing`,missing)}.`:"");
   $("#mr").style.width=n?good/n*100+"%":"0";$("#mt").style.width=n?(n-good)/n*100+"%":"0";
   $("#summary").hidden=$("#tools").hidden=$("#actions").hidden=false;
 }
@@ -1217,6 +1280,7 @@ function applyMode(){
   $("#summary").hidden=$("#tools").hidden=$("#actions").hidden=true;$("#tbl").hidden=true;$("#msg").hidden=false;
   $("#msg").textContent=mode==="tv"?"Enter the folder that holds your TV shows (one folder per show), then choose Scan folder.":"Enter the folder that holds your movies, then choose Scan folder. Next time, your library opens automatically.";
   $("#prog").hidden=true;$("#collBtn").hidden=mode==="tv";
+  restoreView();
 }
 function switchMode(m){if(m===mode||jobId)return;mode=m;selected.clear();localStorage.setItem("mm-mode",m);applyMode();showFolders();loadLibrary()}
 $("#tabMovies").onclick=()=>switchMode("movies");
@@ -1346,17 +1410,43 @@ $("#shRefresh").onclick=async()=>{const done=busy($("#shRefresh"),"Refreshing…
   catch(e){$("#shMsg").innerHTML=`<span class="err">${esc(e.message)}</span>`}done()};
 
 /* ---------- keep the app running while this tab is open; it quits when the tab closes ---------- */
-let pingFails=0,pingTimer=null,appVersion=null;
+let pingFails=0,pingTimer=null,appVersion=null,watchVersion=null,bgJob=null;
+async function followBackground(job){  // a task the app started by itself (watching for new files)
+  bgJob=job.id;JOB_BUTTONS.forEach(s=>$(s).disabled=true);
+  try{for(;;){const j=await api(`/api/job/${job.id}`);showJob({...j,label:"New files: "+j.label});if(j.finished)break;await sleep(700)}}
+  catch{}
+  bgJob=null;if(!jobId)JOB_BUTTONS.forEach(s=>$(s).disabled=false);
+}
+function onPing(d){
+  if(d.job&&!jobId&&!bgJob)followBackground(d.job);
+  const w=d.watch||{};
+  if(watchVersion!==null&&w.version!==watchVersion){
+    if(!w.kind||w.kind===(mode==="tv"?"tv":"movies"))loadLibrary();
+    if(w.message)setTimeout(()=>status("Watching: "+w.message),300);
+  }
+  watchVersion=w.version;
+  const wm=$("#wMsg");
+  if(wm&&(w.last_check||w.error))wm.textContent=[
+    w.last_check&&`Last looked ${new Date(w.last_check*1000).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}.`,
+    w.waiting&&w.waiting.length&&`Still arriving: ${w.waiting.slice(0,3).join(", ")}${w.waiting.length>3?"…":""}`,
+    w.message&&`Last: ${w.message}`, w.error&&`Problem: ${w.error}`].filter(Boolean).join(" ");
+  const jf=d.jellyfin||{};
+  if(jf.configured&&jf.time&&$("#jfMsg")&&!$("#jfMsg").innerHTML)$("#jfMsg").textContent=jf.error?`Last time: ${jf.error}`:
+    `Last told Jellyfin ${new Date(jf.time*1000).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}: ${jf.full?"a library scan":plural(jf.folders,"folder")+" to refresh"}.`;
+  return w.busy;
+}
 async function ping(){
+  let quick=false;
   try{const r=await fetch("/api/ping",{method:"POST"});if(!r.ok)throw 0;
-    const v=(await r.json()).version;if(appVersion&&v&&v!==appVersion){location.reload();return}appVersion=v||appVersion;
+    const d=await r.json();const v=d.version;if(appVersion&&v&&v!==appVersion){location.reload();return}appVersion=v||appVersion;
+    try{quick=onPing(d)}catch{}
     if(pingFails>=2){JOB_BUTTONS.forEach(s=>$(s).disabled=false);status("Reconnected to the app.");loadLibrary()}
     pingFails=0}
   catch{if(++pingFails===2){JOB_BUTTONS.forEach(s=>$(s).disabled=true);status("The app has stopped. Run run.bat to start it again; this page reconnects by itself.",true)}}
-  clearTimeout(pingTimer);pingTimer=setTimeout(ping,pingFails?2000:15000);  // while disconnected, check every 2 s
+  clearTimeout(pingTimer);pingTimer=setTimeout(ping,pingFails||quick?2000:15000);  // while disconnected or watching works, every 2 s
 }
 ping();
-document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")ping()});
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){ping();if(!jobId)document.title=$("#appTitle").textContent}});
 addEventListener("pagehide",()=>navigator.sendBeacon("/api/bye"));
 
 applyMode();

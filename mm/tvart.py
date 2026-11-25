@@ -121,6 +121,7 @@ def save_to(dst: Path, url: str, old: Path = None) -> Path:
         if f.exists():
             core.discard(f)
     os.replace(tmp, dst)
+    core.changed(dst)
     return dst
 
 

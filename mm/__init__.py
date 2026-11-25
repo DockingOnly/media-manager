@@ -8,6 +8,8 @@ renamer    Jellyfin renaming with preview and undo
 nfo        .nfo files (read, write, merge, edit)
 duplicates the same movie or episode more than once: compare the copies, recycle the weaker
 leftovers  folders left with only artwork/.nfo/tracker files, and tracker junk: to the Recycle Bin
+jellyfin   tells Jellyfin which folders changed, so it refreshes them
+watch      watching for new files: match, .nfo and artwork by themselves; renames wait for you
 export     movies, episodes, missing episodes and collections as CSV or HTML
 cli        command-line mode (python app.py --help)
 trakt      Trakt: watched status into the .nfo files (device login)
