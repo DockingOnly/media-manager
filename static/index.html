@@ -465,6 +465,7 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 
 <script>
 const $=s=>document.querySelector(s);
+const $$=s=>[...document.querySelectorAll(s)];
 const MOVIE_COLS=[["sel",""],["del",""],["match","Movie"],["has","Has"],["named","Jellyfin"],["video","Video"],["size","Size","num"],["path","File"]];
 const TV_COLS=[["sel",""],["del",""],["match","Show"],["eps","Episodes"],["has","Has"],["named","Jellyfin"],["size","Size","num"],["folder","Folder"]];
 const MOVIE_FILTERS=[["all","All movies"],["todo","Needs renaming"],["ready","Named for Jellyfin"],["matched","Matched on TMDB"],["review","Needs review"],["unmatched","Not matched"],["no-nfo","Missing .nfo"],["no-art","Missing artwork"],["no-trailer","Missing trailer"],["no-subs","Missing subtitles"],["dups","More than one copy"]];
@@ -1141,8 +1142,10 @@ $("#lGo").onclick=async()=>{
   if(!paths.length)return;
   $("#lGo").disabled=true;
   try{const d=await api("/api/leftovers/recycle",{kind:mode==="tv"?"tv":"movies",paths});lefts=d;renderLeft();
-    finish(`Sent ${plural(d.recycled.length,"item")} to the Recycle Bin.`+(d.failed.length?` Not sent: ${d.failed.map(f=>`${f.path} (${f.error})`).join("; ")}`:""),!!d.failed.length)}
-  catch(e){finish(e.message,true)}
+    const msg=`Sent ${plural(d.recycled.length,"item")} to the Recycle Bin.`+(d.failed.length?` Not sent: ${d.failed.map(f=>`${f.path} (${f.error})`).join("; ")}`:"");
+    $("#lSum").textContent=msg+($("#lSum").textContent?" Still here: "+$("#lSum").textContent:"");
+    finish(msg,!!d.failed.length)}
+  catch(e){$("#lSum").textContent=e.message;finish(e.message,true)}
   finally{$("#lGo").disabled=false}
 };
 
