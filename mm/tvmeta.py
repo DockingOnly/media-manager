@@ -131,7 +131,7 @@ def set_match(key: str, data: dict) -> dict:
 # ---------------------------------------------------------------- show and episode details (cached)
 
 def cached(tmdb_id):
-    return core.load_json(core.TV_CACHE, {}).get(str(tmdb_id))
+    return core.read_json(core.TV_CACHE, {}).get(str(tmdb_id))
 
 
 def show_data(tmdb_id, refresh: bool = False) -> dict:
@@ -286,7 +286,7 @@ def _ordered(tmdb_id, order, refresh: bool = False, offline: bool = False):
     if not base or not order:
         return base
     key = f"{tmdb_id}|{order}"
-    entry = core.load_json(core.TV_CACHE, {}).get(key)
+    entry = core.read_json(core.TV_CACHE, {}).get(key)
     if offline:
         return combine(base, entry) if entry else None
     if not entry or refresh or time.time() - entry.get("fetched", 0) >= REFRESH_AFTER:

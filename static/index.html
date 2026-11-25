@@ -606,9 +606,11 @@ async function scanFolder(refresh){
 $("#scan").onclick=()=>scanFolder(false);
 /* On open: show the last library straight away, then check its folder for new, changed or removed files */
 async function loadLibrary(){
+  const prompt=$("#msg").textContent;
+  if(!rows.length&&!shows.length)$("#msg").textContent="Opening your last library…";
   try{
     const lib=await api(ep("/api/library"));
-    if(!lib.folder)return;
+    if(!lib.folder){$("#msg").textContent=prompt;return}
     $("#folder").value=lib.folder;
     if(lib.missing){status(`Couldn't find ${lib.folder}. Connect the drive, or enter another folder and choose Scan folder.`,true);return}
     const have=mode==="tv"?lib.shows:lib.items;

@@ -57,6 +57,25 @@ def load_json(path: Path, default):
         return default
 
 
+_read_cache = {}
+
+
+def read_json(path: Path, default):
+    """load_json for read-only use: parsed once, and again only when the file changes. Callers must not
+    modify what it returns (the TV cache is read hundreds of times while the TV list is built)."""
+    try:
+        st = path.stat()
+    except OSError:
+        return default
+    stamp = (st.st_mtime_ns, st.st_size)
+    hit = _read_cache.get(str(path))
+    if hit and hit[0] == stamp:
+        return hit[1]
+    data = load_json(path, default)
+    _read_cache[str(path)] = (stamp, data)
+    return data
+
+
 def save_json(path: Path, data) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
