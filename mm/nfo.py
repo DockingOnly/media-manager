@@ -80,7 +80,7 @@ def download(url: str, dst: Path) -> None:
 # ---------------------------------------------------------------- reading, editing and merging .nfo files
 
 XML_HEAD = b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
-EDITABLE = ("title", "originaltitle", "sorttitle", "year", "tagline", "plot", "genres", "set", "mpaa")
+EDITABLE = ("title", "originaltitle", "sorttitle", "year", "tagline", "plot", "genres", "tags", "set", "mpaa")
 # Elements this app writes. When an existing .nfo is updated, only these are replaced; everything else
 # (watched status, play count, tags, ratings, file details from tinyMediaManager...) is kept.
 MANAGED = {"title", "originaltitle", "plot", "outline", "tagline", "runtime", "year", "premiered", "rating", "mpaa",
@@ -153,6 +153,7 @@ def read_nfo_root(root) -> dict:
         "year": int(year) if year.isdigit() else None, "tagline": text(root, "tagline"), "plot": text(root, "plot"),
         "runtime": text(root, "runtime"), "mpaa": text(root, "mpaa") or text(root, "certification"),
         "premiered": text(root, "premiered"), "genres": [g.text.strip() for g in root.findall("genre") if g.text],
+        "tags": [t.text.strip() for t in root.findall("tag") if t.text],
         "set": (root.findtext("set/name") or root.findtext("set") or "").strip(),
         "directors": [d.text.strip() for d in root.findall("director") if d.text],
         "studios": [s.text.strip() for s in root.findall("studio") if s.text][:3],
@@ -198,15 +199,16 @@ def apply_edits(root, edits: dict) -> None:
         set_text(root, "mpaa", edits["mpaa"])
         if root.find("certification") is not None:
             set_text(root, "certification", edits["mpaa"])
-    if "genres" in edits:
-        old = root.findall("genre")
-        at = list(root).index(old[0]) if old else len(root)
-        for g in old:
-            root.remove(g)
-        for i, name in enumerate(edits["genres"]):
-            el = ET.Element("genre")
-            el.text = name
-            root.insert(at + i, el)
+    for field, tag in (("genres", "genre"), ("tags", "tag")):
+        if field in edits:
+            old = root.findall(tag)
+            at = list(root).index(old[0]) if old else len(root)
+            for g in old:
+                root.remove(g)
+            for i, name in enumerate(edits[field]):
+                el = ET.Element(tag)
+                el.text = name
+                root.insert(at + i, el)
     if "set" in edits:
         for s in root.findall("set"):
             root.remove(s)

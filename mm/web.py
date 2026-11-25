@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 from flask import Flask, jsonify, request
 
-from . import artwork, collections, core, library, movie, nfo, renamer, subtitles, tmdbapi, trailers
+from . import artwork, bulk, collections, core, library, movie, nfo, renamer, subtitles, tmdbapi, trailers
 from .core import UserError
 
 app = Flask(__name__, static_folder=str(core.BASE / "static"), static_url_path="")
@@ -283,6 +283,19 @@ def api_artwork():
     root = core.require_scan()
     tmdbapi.tmdb("/configuration")  # fail fast on a missing or bad key
     return job_response("artwork", "Checking for changes", 0, lambda job: artwork.run(job, root, kinds, replace))
+
+
+@app.post("/api/bulk-edit")
+def api_bulk_edit():
+    d = body()
+    ids = [i for i in (d.get("ids") or []) if isinstance(i, str)]
+    if not ids:
+        raise UserError("Select some titles first.")
+    kind = "tv" if d.get("kind") == "tv" else "movies"
+    core.require_tv_scan() if kind == "tv" else core.require_scan()
+    changes = d.get("changes") or {}
+    bulk.plan(changes)  # refuse an empty request before starting
+    return job_response("bulk", "Editing", len(ids), lambda job: bulk.run(job, kind, ids, changes))
 
 
 @app.post("/api/collections")

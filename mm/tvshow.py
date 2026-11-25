@@ -45,6 +45,7 @@ def detail(key: str) -> dict:
         "year": edits.get("year") or (nfo_info or {}).get("year") or (int(s["first_air_date"][:4]) if s.get("first_air_date") else None),
         "plot": edits.get("plot") or (nfo_info or {}).get("plot") or s.get("overview", ""),
         "genres": edits.get("genres") or (nfo_info or {}).get("genres") or s.get("genres", []),
+        "tags": edits.get("tags") or (nfo_info or {}).get("tags") or [],
         "mpaa": edits.get("mpaa") or (nfo_info or {}).get("mpaa") or s.get("mpaa", ""),
         "originaltitle": edits.get("originaltitle") or (nfo_info or {}).get("originaltitle") or s.get("original_name", ""),
         "sorttitle": edits.get("sorttitle") or (nfo_info or {}).get("sorttitle") or "",

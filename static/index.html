@@ -243,6 +243,7 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
   <button class="ghost" id="nfoBtn">Write .nfo files…</button>
   <button class="ghost" id="artBtn">Download artwork…</button>
   <button class="ghost" id="collBtn">Collections…</button>
+  <button id="bulkBtn" hidden>Edit selected…</button>
   <button class="ghost" id="trBtn">Download trailers…</button>
   <button class="ghost" id="subBtn">Download subtitles…</button>
 </div>
@@ -341,6 +342,7 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
     <label class="full">Plot<textarea id="ePlot"></textarea></label>
     <label>Genres (separated by commas)<input id="eGenres"></label>
     <label>Collection<input id="eSet" placeholder="e.g. Alien Collection"></label>
+    <label class="full">Tags (separated by commas)<input id="eTags"></label>
     <p class="note full" style="margin:0">Saved straight into the movie's .nfo, keeping everything else in it. Jellyfin is told not to overwrite your edits, and the app keeps them when it updates .nfo files. A new title or year also becomes the name the renamer uses.</p>
   </form>
   <div class="foot">
@@ -348,6 +350,20 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
     <span id="vViewBtns"><button class="ghost" id="vOpen">Open folder</button> <button class="ghost" id="vMatch">Change match…</button> <button class="ghost" id="vDel">Delete…</button> <button class="ghost" id="vClose">Close</button> <button id="vEditBtn">Edit</button></span>
     <span id="vEditBtns" hidden><button class="ghost" id="vReset">Reset to TMDB</button> <button class="ghost" id="vCancel">Cancel</button> <button id="vSave">Save</button></span>
   </div>
+</div></dialog>
+
+<dialog id="bulkDlg" aria-labelledby="bTitle"><div class="dlg">
+  <div class="head"><h2 id="bTitle">Edit selected</h2><div class="note" id="bSum"></div></div>
+  <div class="body form">
+    <label>Genres<select id="bGenreMode"><option value="">Leave as they are</option><option value="add">Add</option><option value="remove">Remove</option><option value="set">Replace with</option></select></label>
+    <label>&nbsp;<input id="bGenres" placeholder="e.g. Horror, Cult" spellcheck="false"></label>
+    <label>Tags<select id="bTagMode"><option value="">Leave as they are</option><option value="add">Add</option><option value="remove">Remove</option><option value="set">Replace with</option></select></label>
+    <label>&nbsp;<input id="bTags" placeholder="e.g. Halloween, 80s" spellcheck="false"></label>
+    <label id="bSetRow"><span><input type="checkbox" id="bSetOn"> Set the collection</span><input id="bSet" placeholder="Leave empty to remove it from any collection"></label>
+    <label><span><input type="checkbox" id="bMpaaOn"> Set the age rating</span><input id="bMpaa" placeholder="e.g. R or TV-MA"></label>
+    <p class="note full" style="margin:0">Each title's .nfo is updated (everything else in it is kept) and locked so Jellyfin keeps the change. Titles without a confirmed match are skipped.</p>
+  </div>
+  <div class="foot"><button class="ghost" id="bClose">Cancel</button><button id="bGo">Apply</button></div>
 </div></dialog>
 
 <dialog id="collDlg" class="wide" aria-labelledby="cTitle"><div class="dlg">
@@ -368,6 +384,7 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
     <label>Age rating<input id="stMpaa" placeholder="e.g. TV-MA"></label>
     <label class="full">Plot<textarea id="stPlot"></textarea></label>
     <label class="full">Genres (separated by commas)<input id="stGenres"></label>
+    <label class="full">Tags (separated by commas)<input id="stTags"></label>
     <p class="note full" style="margin:0">Saved into tvshow.nfo, keeping everything else in it, and locked so Jellyfin keeps your edits. A new title or year also becomes the show folder's name for the renamer.</p>
   </form>
   <div class="foot">
@@ -421,8 +438,8 @@ header .left{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 
 <script>
 const $=s=>document.querySelector(s);
-const MOVIE_COLS=[["del",""],["match","Movie"],["has","Has"],["named","Jellyfin"],["video","Video"],["size","Size","num"],["path","File"]];
-const TV_COLS=[["del",""],["match","Show"],["eps","Episodes"],["has","Has"],["named","Jellyfin"],["size","Size","num"],["folder","Folder"]];
+const MOVIE_COLS=[["sel",""],["del",""],["match","Movie"],["has","Has"],["named","Jellyfin"],["video","Video"],["size","Size","num"],["path","File"]];
+const TV_COLS=[["sel",""],["del",""],["match","Show"],["eps","Episodes"],["has","Has"],["named","Jellyfin"],["size","Size","num"],["folder","Folder"]];
 const MOVIE_FILTERS=[["all","All movies"],["todo","Needs renaming"],["ready","Named for Jellyfin"],["matched","Matched on TMDB"],["review","Needs review"],["unmatched","Not matched"],["no-nfo","Missing .nfo"],["no-art","Missing artwork"],["no-trailer","Missing trailer"],["no-subs","Missing subtitles"],["dups","More than one copy"]];
 const TV_FILTERS=[["all","All shows"],["missing","Missing episodes"],["todo","Needs renaming"],["ready","Named for Jellyfin"],["matched","Matched on TMDB"],["review","Needs review"],["unmatched","Not matched"],["no-nfo","Missing .nfo files"],["no-art","Missing artwork"],["no-trailer","Missing trailer"],["no-subs","Missing subtitles"]];
 const ART_KINDS={movies:[["poster","Poster"],["fanart","Backdrop"],["logo","Logo"],["landscape","Thumbnail"],["banner","Banner"],["clearart","Clear art"],["disc","Disc art"]],
@@ -448,7 +465,7 @@ async function api(url,data,method){
 function busy(btn,text){const old=btn.textContent;btn.disabled=true;btn.textContent=text;return()=>{btn.disabled=false;btn.textContent=old}}
 /* ---------- progress ---------- */
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const JOB_BUTTONS=["#scan","#matchAll","#renameBtn","#nfoBtn","#artBtn","#collBtn","#trBtn","#subBtn"];
+const JOB_BUTTONS=["#scan","#matchAll","#renameBtn","#nfoBtn","#artBtn","#collBtn","#bulkBtn","#trBtn","#subBtn"];
 let jobId=null;
 function prog(cls){const p=$("#prog");p.hidden=false;p.className="prog"+(cls?" "+cls:"")}
 function status(t,err){  // a message with no bar
@@ -489,7 +506,7 @@ async function runJob(url,data,startLabel,cancellable){
 
 /* ---------- table ---------- */
 function head(){
-  $("#tbl thead").innerHTML="<tr>"+COLS.map(([k,l,c])=>k==="del"?`<th style="width:1%"><span class="sr" style="position:absolute;left:-9999px">Delete</span></th>`:
+  $("#tbl thead").innerHTML="<tr>"+COLS.map(([k,l,c])=>k==="sel"?`<th style="width:1%"><input type="checkbox" id="selAll" aria-label="Select all shown" title="Select all shown"></th>`:k==="del"?`<th style="width:1%"><span class="sr" style="position:absolute;left:-9999px">Delete</span></th>`:
     `<th tabindex="0" data-k="${k}" class="${c||""}"${k===key?` aria-sort="${dir>0?"ascending":"descending"}"`:""}>${l}${k===key?(dir>0?" ▲":" ▼"):""}</th>`).join("")+"</tr>";
 }
 function matchCell(r){
@@ -530,7 +547,8 @@ function render(){
     .sort((a,b)=>{const x=sortVal(a,key)??"",y=sortVal(b,key)??"";
       return dir*(typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y),undefined,{numeric:true}))});
   head();
-  $("#tbl tbody").innerHTML=list.map(r=>`<tr><td><button class="delbtn" data-del="${esc(r.id)}" aria-label="Delete ${esc(r.title)}" title="Delete…">${TRASH}</button></td><td>${matchCell(r)}</td><td>${hasCell(r)}</td><td><span class="tag ${r.named?"r":"t"}">${r.named?"Named":"Needs renaming"}</span></td><td>${esc(videoText(r))}</td><td class="num">${size(r.size)}</td><td class="file" title="${esc(r.path)}"><div>${esc(r.path)}</div></td></tr>`).join("");
+  shownIds=list.map(r=>r.id);updateSel();
+  $("#tbl tbody").innerHTML=list.map(r=>`<tr>${selCell(r)}<td><button class="delbtn" data-del="${esc(r.id)}" aria-label="Delete ${esc(r.title)}" title="Delete…">${TRASH}</button></td><td>${matchCell(r)}</td><td>${hasCell(r)}</td><td><span class="tag ${r.named?"r":"t"}">${r.named?"Named":"Needs renaming"}</span></td><td>${esc(videoText(r))}</td><td class="num">${size(r.size)}</td><td class="file" title="${esc(r.path)}"><div>${esc(r.path)}</div></td></tr>`).join("");
   $("#tbl").hidden=!list.length;
   $("#msg").hidden=!!list.length;
   if(!list.length)$("#msg").textContent=rows.length?"No movies match this filter.":"No video files found in this folder.";
@@ -754,7 +772,7 @@ function setEditMode(on){
     $("#eTitle").value=v("title",i.title||m.title||"");$("#eOriginal").value=v("originaltitle",i.originaltitle||"");
     $("#eSort").value=v("sorttitle",i.sorttitle||"");$("#eYear").value=v("year",i.year||m.year||"");
     $("#eMpaa").value=v("mpaa",i.mpaa||"");$("#eTagline").value=v("tagline",i.tagline||"");
-    $("#ePlot").value=v("plot",i.plot||"");$("#eGenres").value=(v("genres",i.genres||[])).join(", ");$("#eSet").value=v("set",i.set||"");
+    $("#ePlot").value=v("plot",i.plot||"");$("#eGenres").value=(v("genres",i.genres||[])).join(", ");$("#eSet").value=v("set",i.set||"");$("#eTags").value=(v("tags",i.tags||[])).join(", ");
     $("#vReset").hidden=!Object.keys(detail.edits||{}).length;$("#eTitle").focus()}
 }
 async function openDetail(id){
@@ -767,7 +785,7 @@ async function openDetail(id){
 }
 async function saveDetail(reset){
   const fields={title:$("#eTitle").value,originaltitle:$("#eOriginal").value,sorttitle:$("#eSort").value,year:$("#eYear").value,
-    mpaa:$("#eMpaa").value,tagline:$("#eTagline").value,plot:$("#ePlot").value,genres:$("#eGenres").value,set:$("#eSet").value};
+    mpaa:$("#eMpaa").value,tagline:$("#eTagline").value,plot:$("#ePlot").value,genres:$("#eGenres").value,set:$("#eSet").value,tags:$("#eTags").value};
   if(reset&&!confirm("Forget your edits for this movie and go back to TMDB's details?"))return;
   const done=busy(reset?$("#vReset"):$("#vSave"),"Saving…");
   try{detail=await api("/api/movie/edit",{id:detailId,fields,reset});heroFrom(detail);viewFrom(detail);setEditMode(false);
@@ -958,12 +976,13 @@ function renderTv(){
   const list=shows.filter(r=>tvVisible(r,f)&&(!q||`${r.title} ${r.folder} ${r.match?.name||""}`.toLowerCase().includes(q)))
     .sort((a,b)=>{const x=val(a,key)??"",y=val(b,key)??"";return dir*(typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y),undefined,{numeric:true}))});
   head();
+  shownIds=list.map(r=>r.id);updateSel();
   $("#tbl tbody").innerHTML=list.map(r=>{
     const seasons=r.seasons.filter(s=>s>0).length;
     const eps=`${plural(r.episodes,"episode")} · ${plural(seasons,"season")}${r.seasons.includes(0)?" + specials":""}`+
       (r.missing?` <span class="tag t" title="Aired episodes with no file">${r.missing} missing</span>`:r.missing===0?` <span class="tag r">complete</span>`:"")+
       (r.extras?` <span class="note">· ${plural(r.extras,"extra")}</span>`:"");
-    return `<tr><td><button class="delbtn" data-del="${esc(r.id)}" aria-label="Delete ${esc(r.title)}" title="Delete show…">${TRASH}</button></td><td>${matchCell(r)}</td><td>${eps}</td><td>${tvHasCell(r)}</td>
+    return `<tr>${selCell(r)}<td><button class="delbtn" data-del="${esc(r.id)}" aria-label="Delete ${esc(r.title)}" title="Delete show…">${TRASH}</button></td><td>${matchCell(r)}</td><td>${eps}</td><td>${tvHasCell(r)}</td>
       <td><span class="tag ${r.named?"r":"t"}">${r.named?"Named":plural(r.to_rename,"file")+" to rename"}</span></td><td class="num">${size(r.size)}</td><td class="file" title="${esc(r.folder)}"><div>${esc(r.folder)}</div></td></tr>`}).join("");
   $("#tbl").hidden=!list.length;$("#msg").hidden=!!list.length;
   if(!list.length)$("#msg").textContent=shows.length?"No shows match this filter.":"No episodes found in this folder.";
@@ -977,6 +996,38 @@ function summaryTv(){
   $("#mr").style.width=n?good/n*100+"%":"0";$("#mt").style.width=n?(n-good)/n*100+"%":"0";
   $("#summary").hidden=$("#tools").hidden=$("#actions").hidden=false;
 }
+
+/* ---------- selecting and bulk editing ---------- */
+let selected=new Set(),shownIds=[];
+const selCell=r=>`<td><input type="checkbox" class="selbox" data-sel="${esc(r.id)}" ${selected.has(r.id)?"checked":""} aria-label="Select ${esc(r.title||"")}"></td>`;
+function updateSel(){
+  const known=new Set(rows.map(r=>r.id));[...selected].forEach(id=>{if(!known.has(id))selected.delete(id)});
+  const n=selected.size;$("#bulkBtn").hidden=!n;$("#bulkBtn").textContent=`Edit ${n} selected…`;
+  const all=$("#selAll");if(all){all.checked=shownIds.length&&shownIds.every(id=>selected.has(id));all.indeterminate=!all.checked&&shownIds.some(id=>selected.has(id))}
+}
+$("#tbl").addEventListener("change",e=>{
+  if(e.target.id==="selAll"){shownIds.forEach(id=>e.target.checked?selected.add(id):selected.delete(id));render();return}
+  const b=e.target.closest(".selbox");if(b){b.checked?selected.add(b.dataset.sel):selected.delete(b.dataset.sel);updateSel()}
+});
+$("#bulkBtn").onclick=()=>{
+  $("#bSum").textContent=`${noun(selected.size)} selected. Choose what to change; everything else stays as it is.`;
+  $("#bSetRow").hidden=mode==="tv";
+  ["#bGenreMode","#bTagMode"].forEach(x=>$(x).value="");["#bGenres","#bTags","#bSet","#bMpaa"].forEach(x=>$(x).value="");$("#bSetOn").checked=$("#bMpaaOn").checked=false;
+  $("#bulkDlg").showModal()};
+$("#bClose").onclick=()=>$("#bulkDlg").close();
+$("#bGo").onclick=async()=>{
+  const changes={};
+  if($("#bGenreMode").value)changes.genres={mode:$("#bGenreMode").value,values:$("#bGenres").value};
+  if($("#bTagMode").value)changes.tags={mode:$("#bTagMode").value,values:$("#bTags").value};
+  if($("#bSetOn").checked&&mode!=="tv")changes.set=$("#bSet").value;
+  if($("#bMpaaOn").checked)changes.mpaa=$("#bMpaa").value;
+  if(!Object.keys(changes).length){$("#bSum").innerHTML='<span class="err">Choose something to change.</span>';return}
+  $("#bulkDlg").close();
+  try{const d=await runJob("/api/bulk-edit",{kind:mode==="tv"?"tv":"movies",ids:[...selected],changes},"Editing",true);applyResult(d);
+    finish(`Bulk edit done: ${noun(d.edited)} changed, ${d.unchanged} already that way`+(d.skipped.length?`, ${d.skipped.length} skipped (no confirmed match)`:"")+"."+
+      (d.failed.length?` ${d.failed.length} failed: ${d.failed.map(f=>`${f.name} (${f.error})`).join("; ")}`:""),!!d.failed.length)}
+  catch(e){finish(e.message,true)}
+};
 
 /* ---------- collections ---------- */
 let colls=null;
@@ -1014,7 +1065,7 @@ function applyMode(){
   $("#msg").textContent=mode==="tv"?"Enter the folder that holds your TV shows (one folder per show), then choose Scan folder.":"Enter the folder that holds your movies, then choose Scan folder. Next time, your library opens automatically.";
   $("#prog").hidden=true;$("#collBtn").hidden=mode==="tv";
 }
-function switchMode(m){if(m===mode||jobId)return;mode=m;localStorage.setItem("mm-mode",m);applyMode();showFolders();loadLibrary()}
+function switchMode(m){if(m===mode||jobId)return;mode=m;selected.clear();localStorage.setItem("mm-mode",m);applyMode();showFolders();loadLibrary()}
 $("#tabMovies").onclick=()=>switchMode("movies");
 $("#tabTv").onclick=()=>switchMode("tv");
 
@@ -1063,7 +1114,7 @@ function showEditMode(on){
   $("#shView").hidden=on;$("#shEdit").hidden=!on;$("#shViewBtns").hidden=on;$("#shEditBtns").hidden=!on;$("#shMsg").textContent="";
   if(on){const i=showData.info;
     $("#stTitle").value=i.title||"";$("#stOriginal").value=i.originaltitle||"";$("#stSort").value=i.sorttitle||"";$("#stYear").value=i.year||"";
-    $("#stMpaa").value=i.mpaa||"";$("#stPlot").value=i.plot||"";$("#stGenres").value=(i.genres||[]).join(", ");
+    $("#stMpaa").value=i.mpaa||"";$("#stPlot").value=i.plot||"";$("#stGenres").value=(i.genres||[]).join(", ");$("#stTags").value=(i.tags||[]).join(", ");
     $("#shReset").hidden=!Object.keys(showData.edits||{}).length;$("#stTitle").focus()}
 }
 async function openShow(k,keepOpen){
@@ -1076,7 +1127,7 @@ async function openShow(k,keepOpen){
 }
 async function saveShow(reset){
   if(reset&&!confirm("Forget your edits for this show and go back to TMDB's details?"))return;
-  const fields={title:$("#stTitle").value,originaltitle:$("#stOriginal").value,sorttitle:$("#stSort").value,year:$("#stYear").value,mpaa:$("#stMpaa").value,plot:$("#stPlot").value,genres:$("#stGenres").value};
+  const fields={title:$("#stTitle").value,originaltitle:$("#stOriginal").value,sorttitle:$("#stSort").value,year:$("#stYear").value,mpaa:$("#stMpaa").value,plot:$("#stPlot").value,genres:$("#stGenres").value,tags:$("#stTags").value};
   const done=busy(reset?$("#shReset"):$("#shSave"),"Saving…");
   try{showData=await api("/api/tv/edit",{key:showKey,fields,reset});showHero(showData);showViewFrom(showData);showEditMode(false);
     $("#shMsg").innerHTML=`<span class="tag r">${reset?"Back to TMDB's details.":"Saved to tvshow.nfo."}</span>`}

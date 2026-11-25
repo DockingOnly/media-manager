@@ -142,7 +142,7 @@ def clean_edits(fields: dict) -> dict:
     for k, v in fields.items():
         if k not in nfo.EDITABLE:
             continue
-        if k == "genres":
+        if k in ("genres", "tags"):
             items = v if isinstance(v, list) else str(v or "").split(",")
             out[k] = [g.strip() for g in items if g.strip()]
         elif k == "year":
