@@ -3,11 +3,33 @@ import json
 import os
 import re
 import shutil
+import sys
 import threading
 import time
 from pathlib import Path
 
-BASE = Path(__file__).resolve().parent.parent  # the app folder
+FROZEN = bool(getattr(sys, "frozen", False))  # running as the packaged MediaManager.exe
+# The page and other files that ship with the app. Packaged, they're unpacked next to the exe (PyInstaller's _MEIPASS).
+RES = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+
+
+def data_dir() -> Path:
+    """Where your settings, scans, matches and logs live: MM_DATA if set; the packaged app keeps them in
+    %LOCALAPPDATA%\\Media Manager (the exe's own folder may be read-only, and is replaced by each new build);
+    run from source, the app folder as always."""
+    if os.environ.get("MM_DATA"):
+        return Path(os.environ["MM_DATA"]).expanduser().resolve()
+    if FROZEN:
+        return Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "Media Manager"
+    return Path(__file__).resolve().parent.parent
+
+
+BASE = data_dir()  # the app's data folder
+if FROZEN or os.environ.get("MM_DATA"):
+    BASE.mkdir(parents=True, exist_ok=True)
+# MM_ISOLATED=1 keeps Credential Manager, daily backups, the log file and notifications switched off, like the tests:
+# for trying a build (with MM_DATA pointing at an empty folder) without touching your real setup.
+ISOLATED = os.environ.get("MM_ISOLATED", "") not in ("", "0")
 CONFIG = BASE / "config.json"          # folder, API keys, language (keep this file private)
 MATCHES = BASE / "matches.json"        # file path -> TMDB match
 RENAME_LOG = BASE / "rename_log.json"  # rename batches, for undo
@@ -25,7 +47,7 @@ BACKUPS = BASE / "backups"              # daily copies of your matches, edits an
 CONVERT = BASE / "convert.json"         # files waiting to be converted, and how earlier ones went (convert.py)
 SMART = BASE / "smart_collections.json"  # your smart collections and their Jellyfin ids (smart.py)
 BADGES = BASE / "badges.json"          # posters with badges, and where their originals are kept (badges.py)
-PORT = 8765
+PORT = int(os.environ["MM_PORT"]) if os.environ.get("MM_PORT", "").isdigit() else 8765  # MM_PORT runs a second copy
 USER_AGENT = "media-manager/0.8"
 
 VIDEO_EXTS = {".mkv", ".mp4", ".avi", ".m4v", ".mov", ".wmv", ".ts", ".m2ts", ".mpg", ".mpeg", ".webm"}

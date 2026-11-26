@@ -34,3 +34,7 @@ convert.json
 smart_collections.json
 badges.json
 badge-originals/
+
+# Packaged builds (packaging/build.bat)
+build/
+dist/

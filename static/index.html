@@ -1123,7 +1123,6 @@ document.addEventListener("keydown",e=>{
 $("#filter").onkeydown=e=>{if(e.key==="Escape"&&$("#filter").value){e.preventDefault();$("#filter").value="";saveView();render()}};
 $("#tbl").onclick=e=>{
   const mb=e.target.closest(".mbtn");if(mb)return mode==="tv"?openShow(mb.dataset.id):openDetail(mb.dataset.id);
-  const db=e.target.closest(".delbtn");if(db)return mode==="tv"?tvDelete(db.dataset.del,"show"):openDelete(db.dataset.del);
   const th=e.target.closest("th");if(!th||!th.dataset.k)return;const k=th.dataset.k;dir=k===key?-dir:1;key=k;saveView();render();$(`#tbl th[data-k="${k}"]`)?.focus()};
 $("#msg").onclick=e=>{if(e.target.closest("[data-showall]"))setFilter("all")};
 $("#tbl").onkeydown=e=>{if(e.key==="Enter"&&e.target.matches("th"))e.target.click()};
@@ -2562,7 +2561,10 @@ $("#badgeBtn").onclick=openBadges;
    Both share the filter, the selection and the highlighted item; the sidebar and the inspector sit beside both. */
 const cardEl=id=>id?$("#wall").querySelector(`[data-card="${CSS.escape(id)}"]`):null;
 const itemEl=id=>(look==="theatrical"&&cardEl(id))||rowEl(id)||cardEl(id);
-const posterUrl=r=>{const p=r.match&&r.match.poster;return p?p.replace("/w185/","/w342/"):""};
+// TMDB's poster when matched (small and quick); otherwise the poster file already beside the video, if there is one
+const posterUrl=r=>{const p=r.match&&r.match.poster;if(p)return p.replace("/w185/","/w342/");
+  if(mode==="tv")return(r.has||{}).art?`/api/tv/image?key=${encodeURIComponent(r.id)}&kind=poster`:"";
+  return(r.files||{}).art?`/api/image?id=${encodeURIComponent(r.id)}&kind=poster`:""};
 const titleOf=r=>(r.match&&r.match.title)||r.title||"";
 function setLook(l,quiet){
   look=l==="theatrical"?"theatrical":"technical";localStorage.setItem("mm-look-"+mode,look);document.body.dataset.look=look;
