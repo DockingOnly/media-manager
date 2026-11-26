@@ -14,9 +14,9 @@ from . import (artwork, backup, badges, bulk, collections, convert, core, dupes,
                movie, nfo, notify, playback, renamer, smart, subtitles, tmdbapi, trailers, trakt, vault, watch)
 from .core import UserError
 
-app = Flask(__name__, static_folder=str(core.BASE / "static"), static_url_path="")
+app = Flask(__name__, static_folder=str(core.RES / "static"), static_url_path="")
 # Changes whenever the app's code or page changes, so an open tab knows to reload itself after an update
-APP_VERSION = str(int(max(f.stat().st_mtime for f in [core.BASE / "static" / "index.html",
+APP_VERSION = str(int(max(f.stat().st_mtime for f in [core.RES / "static" / "index.html",
                                                      *Path(__file__).parent.glob("*.py")])))
 LOCAL_HOSTS = {"127.0.0.1", "localhost"}
 
@@ -941,8 +941,8 @@ def close_old_copy(port: int) -> bool:
         return True
     pid = listening_pid(port)
     info = process_info(pid) if pid else {}
-    if not info or info.get("Name", "").lower() not in ("python.exe", "pythonw.exe"):
-        return False  # not a Python program: certainly not ours
+    if not info or info.get("Name", "").lower() not in ("python.exe", "pythonw.exe", "mediamanager.exe"):
+        return False  # not Python or the packaged app: certainly not ours
     # Walk up to the window it runs in: Python (and the .venv launcher), then the run.bat console
     top, parent, from_our_bat = pid, info.get("ParentProcessId"), False
     for _ in range(3):
@@ -950,7 +950,7 @@ def close_old_copy(port: int) -> bool:
         name, line = p.get("Name", "").lower(), (p.get("CommandLine") or "").lower()
         if name in ("python.exe", "pythonw.exe"):
             top, parent = parent, p.get("ParentProcessId")
-        elif name == "cmd.exe" and str(core.BASE / "run.bat").lower() in line:
+        elif name == "cmd.exe" and str(core.RES / "run.bat").lower() in line:
             top, from_our_bat = parent, True
             break
         else:
@@ -987,8 +987,8 @@ def app_mode() -> None:
     """What only the real app (and its command line) does: keep History, keep keys in Credential Manager, make
     daily backups, write the log file, pop up notifications. Tests leave all of this off."""
     history.enabled = True
-    if core.CONFIG != core.BASE / "config.json":
-        return  # a test using its own data files: never touch your credentials, backups, log or screen
+    if core.CONFIG != core.BASE / "config.json" or core.ISOLATED:
+        return  # a test, or MM_ISOLATED: never touch your credentials, backups, log or screen
     vault.enabled = backup.enabled = notify.enabled = True
     logs.setup()
     try:
@@ -1015,7 +1015,8 @@ def main() -> None:
     jellyfin.start()
     watch.start()
     backup.start()
-    threading.Timer(3.0, open_browser_unless_reconnected, args=(port,)).start()
+    if not os.environ.get("MM_NO_BROWSER"):
+        threading.Timer(3.0, open_browser_unless_reconnected, args=(port,)).start()
     print(f"Media manager is running at http://127.0.0.1:{port}")
     print("Closing the browser tab shuts it down. You can also close this window.")
     app.run(host="127.0.0.1", port=port, threaded=True)
